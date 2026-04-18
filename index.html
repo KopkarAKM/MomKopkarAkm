@@ -1,0 +1,654 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Printer, Plus, Trash2, Camera, UserPlus, 
+  LayoutDashboard, FileText, CheckCircle, Clock,
+  AlertCircle, Save, Edit, Link as LinkIcon, X,
+  AlertTriangle, Calendar, Upload, RefreshCw, Copy, Eye
+} from 'lucide-react';
+
+// URL Google Apps Script Anda (Database Live)
+const GAS_URL = "https://script.google.com/macros/s/AKfycbxM0ftIZ9aKkCOu_19OgD1ZxJtmDw434moCfkubMgud_ihedxfRpncPFzodkH0aIYO6ww/exec";
+
+export default function App() {
+  const [moms, setMoms] = useState([]);
+  const [activeTab, setActiveTab] = useState('dashboard'); // 'dashboard', 'form', 'preview'
+  const [isLoading, setIsLoading] = useState(true);
+
+  // State untuk Form Input MOM
+  const [currentMomId, setCurrentMomId] = useState('');
+  const [meetingInfo, setMeetingInfo] = useState({
+    date: '', time: '', location: '', agenda: '', preparedBy: ''
+  });
+  const [attendees, setAttendees] = useState([{ id: Date.now(), name: '' }]);
+  const [actions, setActions] = useState([]);
+  const [docs, setDocs] = useState([]);
+
+  // State untuk Modal Follow Up
+  const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);
+  const [selectedAction, setSelectedAction] = useState(null);
+  const [selectedMomId, setSelectedMomId] = useState(null);
+
+  // --- 1. FETCH DATA DARI GOOGLE SHEETS ---
+  const fetchMoms = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(GAS_URL);
+      const result = await response.json();
+      if (result.status === 'success') {
+        const fetchedMoms = result.data;
+        fetchedMoms.sort((a, b) => new Date(b.meetingInfo.date) - new Date(a.meetingInfo.date));
+        setMoms(fetchedMoms);
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      alert("Gagal menarik data dari Google Sheets. Pastikan koneksi internet stabil.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMoms();
+  }, []);
+
+  // --- 2. LOGIKA CARRY OVER (REVIEW BULANAN) ---
+  const handleCarryOverMom = (mom) => {
+    // Tarik hanya task yang belum selesai (Status 1 dan 2)
+    const unfinishedTasks = (mom.actions || []).filter(a => a.status !== '3');
+    
+    // Buat ID baru agar tersimpan sebagai baris baru di Sheet
+    setCurrentMomId(Date.now().toString());
+    setMeetingInfo({ 
+      ...mom.meetingInfo, 
+      date: '', 
+      time: '', 
+      agenda: `Review / Lanjutan: ${mom.meetingInfo.agenda}` 
+    });
+    setActions(unfinishedTasks);
+    setDocs([]);
+    setAttendees([{ id: Date.now(), name: '' }]);
+    setActiveTab('form');
+  };
+
+  // --- 3. DATABASE OPERATIONS (WRITE & DELETE) ---
+  const saveMom = async () => {
+    if (!meetingInfo.agenda || !meetingInfo.date) {
+      alert("Agenda dan Tanggal wajib diisi!");
+      return;
+    }
+
+    try {
+      const isNew = !currentMomId;
+      const momData = {
+        id: isNew ? Date.now().toString() : currentMomId,
+        meetingInfo,
+        attendees,
+        actions,
+        docs,
+        updatedAt: new Date().toISOString()
+      };
+      
+      await fetch(GAS_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'save', mom: momData }),
+      });
+      
+      alert("MOM Berhasil Disimpan ke Google Sheets!");
+      resetForm();
+      fetchMoms();
+      setActiveTab('dashboard');
+    } catch (error) {
+      console.error("Error saving MOM:", error);
+      alert("Gagal menyimpan MOM.");
+    }
+  };
+
+  const deleteMom = async (id) => {
+    if (confirm("Anda yakin ingin menghapus MOM ini selamanya dari database?")) {
+      try {
+        await fetch(GAS_URL, {
+          method: 'POST',
+          body: JSON.stringify({ action: 'delete', id: id }),
+        });
+        fetchMoms();
+      } catch (error) {
+         console.error("Error deleting:", error);
+      }
+    }
+  };
+
+  const saveFollowUp = async () => {
+    if (!selectedMomId || !selectedAction) return;
+    const parentMom = moms.find(m => m.id === selectedMomId);
+    if (!parentMom) return;
+
+    const updatedActions = parentMom.actions.map(a => 
+      a.id === selectedAction.id ? selectedAction : a
+    );
+
+    const updatedMomData = {
+        ...parentMom,
+        actions: updatedActions,
+        updatedAt: new Date().toISOString()
+    };
+
+    try {
+      await fetch(GAS_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'save', mom: updatedMomData }),
+      });
+      setIsFollowUpModalOpen(false);
+      fetchMoms();
+    } catch (error) {
+      console.error("Error updating follow up:", error);
+      alert("Gagal mengupdate status.");
+    }
+  };
+
+  // --- HANDLERS UNTUK FORM & FOTO ---
+  const resetForm = () => {
+    setCurrentMomId('');
+    setMeetingInfo({ date: '', time: '', location: '', agenda: '', preparedBy: '' });
+    setAttendees([{ id: Date.now(), name: '' }]);
+    setActions([]);
+    setDocs([]);
+  };
+
+  const createNewMom = () => {
+    resetForm();
+    setCurrentMomId(Date.now().toString());
+    setActiveTab('form');
+  };
+
+  const loadMomForEdit = (mom) => {
+    setCurrentMomId(mom.id);
+    setMeetingInfo(mom.meetingInfo || {});
+    setAttendees(mom.attendees || []);
+    setActions(mom.actions || []);
+    setDocs(mom.docs || []);
+    setActiveTab('form');
+  };
+
+  const loadMomForPreview = (mom) => {
+    setCurrentMomId(mom.id);
+    setMeetingInfo(mom.meetingInfo || {});
+    setAttendees(mom.attendees || []);
+    setActions(mom.actions || []);
+    setDocs(mom.docs || []);
+    setActiveTab('preview');
+  };
+
+  const handleInfoChange = (e) => setMeetingInfo({ ...meetingInfo, [e.target.name]: e.target.value });
+  
+  const addAttendee = () => setAttendees([...attendees, { id: Date.now(), name: '' }]);
+  const updateAttendee = (id, name) => setAttendees(attendees.map(a => a.id === id ? { ...a, name } : a));
+  const removeAttendee = (id) => setAttendees(attendees.filter(a => a.id !== id));
+
+  const addAction = () => setActions([...actions, { id: Date.now(), topic: '', deadline: '', pic: '', status: '1', proofLink: '', proofNote: '' }]);
+  const updateAction = (id, field, value) => setActions(actions.map(a => a.id === id ? { ...a, [field]: value } : a));
+  const removeAction = (id) => setActions(actions.filter(a => a.id !== id));
+
+  // Kompresi Foto agar Sheet tidak terlalu berat
+  const handleImageUpload = (e, targetSetter, isModal = false) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 600;
+        const scaleSize = MAX_WIDTH / img.width;
+        canvas.width = MAX_WIDTH;
+        canvas.height = img.height * scaleSize;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.6); 
+        
+        if (isModal) {
+          targetSetter({...selectedAction, proofImageBase64: dataUrl});
+        } else {
+          setDocs([...docs, { id: Date.now(), url: dataUrl, description: '' }]);
+        }
+      };
+      img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const removeDoc = (id) => setDocs(docs.filter(d => d.id !== id));
+  const updateDocDesc = (id, desc) => setDocs(docs.map(d => d.id === id ? { ...d, description: desc } : d));
+
+  const printDocument = () => window.print();
+
+  // --- LOGIKA DASHBOARD & STATISTIK ---
+  let allTasks = [];
+  moms.forEach(mom => {
+    if (mom.actions) {
+      mom.actions.forEach(action => {
+        allTasks.push({
+          ...action,
+          momId: mom.id,
+          momDate: mom.meetingInfo?.date,
+          momAgenda: mom.meetingInfo?.agenda
+        });
+      });
+    }
+  });
+
+  allTasks.sort((a, b) => parseInt(a.status) - parseInt(b.status));
+
+  const totalTasks = allTasks.length;
+  const closedTasks = allTasks.filter(t => t.status === '3').length;
+
+  const checkDueDateRisk = (deadline, status) => {
+    if (status === '3') return { label: 'Selesai', color: 'text-green-600', bg: 'bg-green-50' };
+    if (!deadline) return { label: 'Aman', color: 'text-gray-600', bg: 'bg-gray-50' };
+    
+    const dlLower = deadline.toLowerCase();
+    if (dlLower.includes('asap') || dlLower.includes('segera') || dlLower.includes('urgent')) {
+      return { label: 'Kritis / ASAP', color: 'text-red-700', bg: 'bg-red-50' };
+    }
+    
+    const currentMonth = new Date().toLocaleString('id-ID', { month: 'long' }).toLowerCase();
+    const currentMonthNum = new Date().getMonth() + 1;
+    
+    const months = ["januari", "februari", "maret", "april", "mei", "juni", "juli", "agustus", "september", "oktober", "november", "desember"];
+    const deadlineMonthIndex = months.findIndex(m => dlLower.includes(m));
+    
+    if (deadlineMonthIndex !== -1 && deadlineMonthIndex < currentMonthNum - 1) {
+       return { label: 'Overdue', color: 'text-red-700', bg: 'bg-red-50' };
+    }
+
+    return { label: 'Mendekati', color: 'text-yellow-700', bg: 'bg-yellow-50' };
+  };
+
+  const urgentTasks = allTasks.filter(t => t.status !== '3' && (
+    t.deadline?.toLowerCase().includes('asap') || 
+    checkDueDateRisk(t.deadline, t.status).label === 'Overdue'
+  ));
+
+  const getStatusBadge = (status) => {
+    if (status === '1') return <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-xs font-bold">Belum</span>;
+    if (status === '2') return <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-xs font-bold">Progress</span>;
+    if (status === '3') return <span className="bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-bold">Selesai</span>;
+    return null;
+  };
+
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 text-xl flex-col gap-4"><RefreshCw className="animate-spin" size={32}/> Sinkronisasi Data Sheets...</div>;
+
+  return (
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
+      
+      {/* HEADER NAV */}
+      <nav className="bg-white border-b shadow-sm print:hidden sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16">
+            <div className="flex items-center gap-2">
+              <div className="bg-blue-600 text-white p-2 rounded-lg"><FileText size={20} /></div>
+              <span className="font-bold text-lg tracking-tight">Kopkar AKM - Sistem MOM</span>
+            </div>
+            <div className="flex items-center space-x-4">
+              <button onClick={fetchMoms} className="px-3 py-2 text-gray-400 hover:text-blue-600 transition-colors" title="Tarik Data Terbaru"><RefreshCw size={18} /></button>
+              <button onClick={() => setActiveTab('dashboard')} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'dashboard' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>Dashboard</button>
+              <button onClick={createNewMom} className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === 'form' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}><span className="flex items-center gap-1"><Plus size={16}/> Buat Baru</span></button>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <div className="max-w-7xl mx-auto p-4 sm:p-8">
+        
+        {/* =========================================
+            TAB 1: EXECUTIVE DASHBOARD
+            ========================================= */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-6 print:hidden">
+            <div className="flex justify-between items-end border-b pb-4">
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">Executive Summary</h1>
+                <p className="text-gray-500 text-sm mt-1">Pantau status MOM, tindak lanjut, dan performa penyelesaian tugas.</p>
+              </div>
+            </div>
+
+            {/* Highlight Tugas Mendesak */}
+            {urgentTasks.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-5 shadow-sm">
+                <h2 className="font-bold text-red-800 flex items-center gap-2 mb-4">
+                  <AlertTriangle size={20} /> Butuh Perhatian Segera (Overdue / ASAP)
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {urgentTasks.map((task, idx) => (
+                    <div key={idx} className="bg-white p-4 rounded-lg border border-red-100 shadow-sm flex flex-col justify-between">
+                      <div>
+                        <div className="text-xs font-bold text-red-600 mb-2 uppercase">{task.deadline}</div>
+                        <div className="font-medium text-sm text-gray-800 line-clamp-3 mb-2">{task.topic}</div>
+                      </div>
+                      <div className="text-xs text-gray-500 flex justify-between items-center mt-3 pt-3 border-t">
+                        <span className="font-medium text-gray-700">PIC: {task.pic}</span>
+                        <button 
+                          onClick={() => { setSelectedMomId(task.momId); setSelectedAction(task); setIsFollowUpModalOpen(true); }}
+                          className="bg-red-100 text-red-700 px-3 py-1.5 rounded font-bold hover:bg-red-200 transition-colors"
+                        >Follow Up</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Tabel Follow Up Tugas Lengkap */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="p-5 border-b bg-gray-50 flex justify-between items-center">
+                <h2 className="font-bold text-lg">Daftar Semua Tindak Lanjut & Bukti</h2>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-50 text-gray-600 uppercase text-xs">
+                    <tr>
+                      <th className="px-4 py-3">Topik / Masalah</th>
+                      <th className="px-4 py-3">PIC</th>
+                      <th className="px-4 py-3">Jatuh Tempo</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Bukti Follow-Up</th>
+                      <th className="px-4 py-3 text-right">Aksi</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {allTasks.length === 0 ? (
+                      <tr><td colSpan="6" className="px-4 py-8 text-center text-gray-500">Belum ada data tugas. Buat MOM baru terlebih dahulu.</td></tr>
+                    ) : allTasks.map((task, i) => {
+                      const risk = checkDueDateRisk(task.deadline, task.status);
+                      return (
+                      <tr key={i} className="hover:bg-gray-50">
+                        <td className="px-4 py-3 w-1/3">
+                          <div className="font-medium text-gray-900 line-clamp-2">{task.topic || '-'}</div>
+                          <div className="text-xs text-gray-500 mt-1 flex items-center gap-1"><Calendar size={12}/> {task.momDate}</div>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-700">{task.pic || '-'}</td>
+                        <td className="px-4 py-3">
+                           <div className="text-sm font-medium">{task.deadline || '-'}</div>
+                           <div className={`text-xs mt-0.5 font-bold ${risk.color}`}>{risk.label}</div>
+                        </td>
+                        <td className="px-4 py-3">{getStatusBadge(task.status)}</td>
+                        <td className="px-4 py-3">
+                          {task.proofImageBase64 && <img src={task.proofImageBase64} alt="Bukti" className="h-10 w-16 object-cover rounded border border-gray-200 mb-1 cursor-pointer hover:opacity-80" onClick={() => window.open(task.proofImageBase64)} />}
+                          {task.proofLink && <a href={task.proofLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2 py-1 bg-blue-50 text-blue-700 rounded text-xs font-medium hover:bg-blue-100 mb-1"><LinkIcon size={12} /> Link</a>}
+                          {task.proofNote && <div className="text-xs text-gray-600 italic bg-gray-50 p-1.5 rounded line-clamp-2">{task.proofNote}</div>}
+                          {(!task.proofLink && !task.proofNote && !task.proofImageBase64) && <span className="text-xs text-gray-400">Belum ada bukti</span>}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <button 
+                            onClick={() => { setSelectedMomId(task.momId); setSelectedAction(task); setIsFollowUpModalOpen(true); }}
+                            className="text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-md text-xs font-medium transition-colors shadow-sm whitespace-nowrap"
+                          >Update Progress</button>
+                        </td>
+                      </tr>
+                    )})}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Arsip MOM (Pusat Aksi Review Bulanan) */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-8">
+              <div className="p-5 border-b bg-gray-50 flex justify-between items-center">
+                <h2 className="font-bold text-lg flex items-center gap-2"><LayoutDashboard size={20}/> Arsip Manajemen MOM</h2>
+              </div>
+              <div className="p-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {moms.map(mom => (
+                  <div key={mom.id} className="border border-gray-200 rounded-lg p-4 flex flex-col justify-between hover:shadow-md transition-shadow bg-white">
+                    <div>
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded font-bold flex items-center gap-1"><Calendar size={12}/> {mom.meetingInfo.date}</span>
+                      </div>
+                      <h3 className="font-bold text-gray-800 text-lg mb-1 line-clamp-2">{mom.meetingInfo.agenda}</h3>
+                      <p className="text-sm text-gray-500 mb-4">{mom.actions?.length || 0} Task Terdaftar</p>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <div className="flex gap-2">
+                        <button onClick={() => loadMomForPreview(mom)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded text-xs font-bold flex items-center justify-center gap-1"><Eye size={14}/> Lihat / Cetak</button>
+                        <button onClick={() => loadMomForEdit(mom)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-2 rounded text-xs font-bold flex items-center justify-center gap-1"><Edit size={14}/> Edit MOM</button>
+                      </div>
+                      {/* TOMBOL CARRY OVER / REVIEW BULANAN */}
+                      <button 
+                        onClick={() => handleCarryOverMom(mom)} 
+                        className="w-full bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-700 py-2 rounded text-xs font-bold flex items-center justify-center gap-1 transition-colors"
+                        title="Buat MOM baru dengan menarik otomatis semua task yang belum selesai dari MOM ini"
+                      >
+                        <Copy size={14}/> Jadikan Acuan MOM Selanjutnya
+                      </button>
+                      <button onClick={() => deleteMom(mom.id)} className="w-full text-red-500 hover:bg-red-50 py-1.5 rounded text-xs font-bold">Hapus Arsip</button>
+                    </div>
+                  </div>
+                ))}
+                {moms.length === 0 && <div className="col-span-full text-center text-gray-500 py-8">Belum ada arsip MOM.</div>}
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* =========================================
+            TAB 2: FORM INPUT/EDIT MOM
+            ========================================= */}
+        {activeTab === 'form' && (
+          <div className="bg-white p-6 rounded-xl shadow-md space-y-8 print:hidden max-w-4xl mx-auto">
+            <div className="flex justify-between items-center border-b pb-4">
+              <h2 className="text-xl font-bold text-gray-800">{currentMomId ? 'Edit MOM' : 'Buat MOM Baru'}</h2>
+              <button onClick={saveMom} className="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-bold flex items-center gap-2 shadow-sm transition-colors"><Save size={18}/> Simpan ke Database</button>
+            </div>
+            
+            <div className="space-y-4">
+              <h3 className="font-bold text-gray-700 bg-gray-50 p-2 rounded">1. Informasi Rapat</h3>
+              <div><label className="block text-sm font-medium text-gray-700">Agenda</label><input type="text" name="agenda" value={meetingInfo.agenda || ''} onChange={handleInfoChange} className="mt-1 w-full border border-gray-300 rounded-md p-2" /></div>
+              <div className="grid grid-cols-2 gap-4">
+                <div><label className="block text-sm font-medium text-gray-700">Tanggal</label><input type="date" name="date" value={meetingInfo.date || ''} onChange={handleInfoChange} className="mt-1 w-full border border-gray-300 rounded-md p-2" /></div>
+                <div><label className="block text-sm font-medium text-gray-700">Waktu</label><input type="text" name="time" value={meetingInfo.time || ''} onChange={handleInfoChange} className="mt-1 w-full border border-gray-300 rounded-md p-2" placeholder="17:00 - 21:00" /></div>
+              </div>
+              <div><label className="block text-sm font-medium text-gray-700">Lokasi</label><input type="text" name="location" value={meetingInfo.location || ''} onChange={handleInfoChange} className="mt-1 w-full border border-gray-300 rounded-md p-2" /></div>
+              <div><label className="block text-sm font-medium text-gray-700">Dibuat Oleh</label><input type="text" name="preparedBy" value={meetingInfo.preparedBy || ''} onChange={handleInfoChange} className="mt-1 w-full border border-gray-300 rounded-md p-2" /></div>
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-2 bg-gray-50 p-2 rounded">
+                <h3 className="font-bold text-gray-700">2. Daftar Hadir</h3>
+                <button onClick={addAttendee} className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-sm font-bold"><UserPlus size={16} /> Tambah</button>
+              </div>
+              <div className="space-y-2">
+                {attendees.map((attendee, index) => (
+                  <div key={attendee.id} className="flex gap-2">
+                    <span className="p-2 text-gray-500 font-medium">{index + 1}.</span>
+                    <input type="text" value={attendee.name || ''} onChange={(e) => updateAttendee(attendee.id, e.target.value)} className="flex-1 border border-gray-300 rounded-md p-2" placeholder="Nama Peserta"/>
+                    <button onClick={() => removeAttendee(attendee.id)} className="text-red-500 p-2 hover:bg-red-50 rounded"><Trash2 size={18} /></button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <div className="flex justify-between items-center mb-2 bg-gray-50 p-2 rounded">
+                <h3 className="font-bold text-gray-700">3. Ringkasan & Tindak Lanjut</h3>
+                <button onClick={addAction} className="text-blue-600 hover:text-blue-800 flex items-center gap-1 text-sm font-bold"><Plus size={16} /> Tambah Task</button>
+              </div>
+              <div className="space-y-4">
+                {actions.map((action, index) => (
+                  <div key={action.id} className="p-4 border border-gray-200 rounded-lg bg-white relative shadow-sm">
+                    <button onClick={() => removeAction(action.id)} className="absolute top-2 right-2 text-red-500 hover:bg-red-100 p-1 rounded"><Trash2 size={16} /></button>
+                    <div className="space-y-3 mt-2">
+                      <div><label className="block text-xs font-bold text-gray-500 uppercase">Topik / Masalah</label><textarea value={action.topic || ''} onChange={(e) => updateAction(action.id, 'topic', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm h-16"/></div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div><label className="block text-xs font-bold text-gray-500 uppercase">Batas Waktu</label><input type="text" value={action.deadline || ''} onChange={(e) => updateAction(action.id, 'deadline', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm" placeholder="Contoh: ASAP / Maret"/></div>
+                        <div><label className="block text-xs font-bold text-gray-500 uppercase">PIC</label><input type="text" value={action.pic || ''} onChange={(e) => updateAction(action.id, 'pic', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm" /></div>
+                        <div>
+                          <label className="block text-xs font-bold text-gray-500 uppercase">Status Awal</label>
+                          <select value={action.status || '1'} onChange={(e) => updateAction(action.id, 'status', e.target.value)} className="w-full border border-gray-300 rounded p-2 text-sm font-bold">
+                            <option value="1">Belum</option><option value="2">Progress</option><option value="3">Selesai</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            <div className="pt-4 border-t">
+              <button onClick={saveMom} className="w-full bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-bold flex justify-center items-center gap-2 shadow-md transition-colors text-lg"><Save size={20}/> Simpan MOM ke Database</button>
+            </div>
+          </div>
+        )}
+
+        {/* =========================================
+            TAB 3: PREVIEW & CETAK PDF
+            ========================================= */}
+        {activeTab === 'preview' && (
+          <div className="space-y-4">
+             <div className="flex justify-between items-center print:hidden bg-white p-4 rounded-lg shadow-sm border mb-4 max-w-4xl mx-auto">
+               <button onClick={() => setActiveTab('dashboard')} className="text-gray-600 font-bold hover:text-gray-900 flex items-center gap-2"><X size={20}/> Kembali</button>
+               <button onClick={printDocument} className="bg-blue-600 text-white px-6 py-2 rounded-lg shadow font-bold flex items-center gap-2 hover:bg-blue-700 transition-colors"><Printer size={20} /> Cetak / PDF</button>
+             </div>
+
+             {/* Kertas Dokumen */}
+             <div className="bg-white p-10 rounded shadow-md w-full max-w-4xl mx-auto min-h-[297mm] print:shadow-none print:p-0 print:max-w-none text-black">
+                <div className="text-center border-b-4 border-double border-black pb-4 mb-6">
+                  <h1 className="text-xl font-bold uppercase">Koperasi Karyawan</h1>
+                  <h1 className="text-2xl font-bold uppercase tracking-wider">Adaro Karya Mandiri</h1>
+                  <p className="text-xs mt-1">Office: Jln Jend. A Yani Komp. Swadharma Jalur Blok Mawar RT IV Kel Mabuun Kec. Murung Pudak<br/>Kab. Tabalong Prov. Kalimantan Selatan Kode Pos 71571</p>
+                </div>
+
+                <h2 className="text-center text-lg font-bold underline mb-6 uppercase tracking-widest">Minutes Of Meeting</h2>
+
+                <table className="w-full mb-6 text-sm">
+                  <tbody>
+                    <tr><td className="w-32 py-1 font-bold">Agenda</td><td className="w-4">:</td><td>{meetingInfo.agenda}</td></tr>
+                    <tr><td className="py-1 font-bold">Hari / Tanggal</td><td>:</td><td>{meetingInfo.date}</td></tr>
+                    <tr><td className="py-1 font-bold">Waktu</td><td>:</td><td>{meetingInfo.time}</td></tr>
+                    <tr><td className="py-1 font-bold align-top">Tempat</td><td className="align-top">:</td><td>{meetingInfo.location}</td></tr>
+                  </tbody>
+                </table>
+
+                <div className="mb-6">
+                  <p className="font-bold text-sm mb-2 uppercase">Daftar Hadir:</p>
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
+                    {attendees.map((a, i) => (
+                      <div key={a.id} className="border-b border-dotted border-gray-400 py-1 flex">
+                        <span className="w-6">{i+1}.</span><span>{a.name || '...........................................'}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="mb-8">
+                  <p className="font-bold text-sm mb-2 uppercase">Ringkasan Rapat & Tindak Lanjut:</p>
+                  <table className="w-full text-sm border-collapse border border-black">
+                    <thead className="bg-gray-100 text-center">
+                      <tr>
+                        <th className="border border-black py-2 px-2 w-10">No</th>
+                        <th className="border border-black py-2 px-2">Topik / Masalah</th>
+                        <th className="border border-black py-2 px-2 w-24">Batas Waktu</th>
+                        <th className="border border-black py-2 px-2 w-32">PIC</th>
+                        <th className="border border-black py-2 px-2 w-28">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {actions.map((a, i) => (
+                        <tr key={a.id}>
+                          <td className="border border-black py-2 px-2 text-center align-top">{i + 1}</td>
+                          <td className="border border-black py-2 px-2 align-top whitespace-pre-wrap">{a.topic}</td>
+                          <td className="border border-black py-2 px-2 text-center align-top">{a.deadline}</td>
+                          <td className="border border-black py-2 px-2 text-center align-top">{a.pic}</td>
+                          <td className="border border-black py-2 px-2 text-center align-top font-bold">
+                            {a.status === '1' ? 'Belum' : a.status === '2' ? 'Progress' : 'Selesai'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="mt-2 flex gap-4 text-xs">
+                    <span className="font-bold">*Status:</span>
+                    <span>1 = Belum Dikerjakan</span>
+                    <span>2 = Sedang Dikerjakan</span>
+                    <span>3 = Selesai</span>
+                  </div>
+                </div>
+
+                <div className="mt-16 flex justify-end break-inside-avoid">
+                  <div className="text-center text-sm">
+                      <p>Dibuat Oleh,</p>
+                      <div className="h-24"></div>
+                      <p className="font-bold underline">{meetingInfo.preparedBy}</p>
+                  </div>
+                </div>
+             </div>
+          </div>
+        )}
+      </div>
+
+      {/* =========================================
+          MODAL FOLLOW UP PROGRESS (Update Status)
+          ========================================= */}
+      {isFollowUpModalOpen && selectedAction && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 print:hidden">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
+            <div className="p-4 border-b flex justify-between items-center bg-gray-50">
+              <h3 className="font-bold text-lg">Update Progress</h3>
+              <button onClick={() => setIsFollowUpModalOpen(false)} className="text-gray-500 hover:bg-gray-200 p-1 rounded"><X size={20}/></button>
+            </div>
+            <div className="p-6 space-y-5">
+              <div className="bg-blue-50 p-3 rounded text-sm text-blue-900 border border-blue-100">
+                <span className="font-bold block mb-1">Topik:</span>
+                {selectedAction.topic}
+              </div>
+              
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">1. Ubah Status</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button onClick={() => setSelectedAction({...selectedAction, status: '1'})} className={`py-2 rounded text-xs font-bold border transition-colors ${selectedAction.status === '1' ? 'bg-red-100 border-red-500 text-red-700' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>Belum</button>
+                  <button onClick={() => setSelectedAction({...selectedAction, status: '2'})} className={`py-2 rounded text-xs font-bold border transition-colors ${selectedAction.status === '2' ? 'bg-yellow-100 border-yellow-500 text-yellow-700' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>Progress</button>
+                  <button onClick={() => setSelectedAction({...selectedAction, status: '3'})} className={`py-2 rounded text-xs font-bold border transition-colors ${selectedAction.status === '3' ? 'bg-green-100 border-green-500 text-green-700' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}>Selesai</button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">2. Upload Foto Bukti</label>
+                <div className="flex items-center gap-4">
+                  <label className="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded border cursor-pointer text-sm font-bold transition-colors">
+                    <Upload size={16} /> Pilih Foto
+                    <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, setSelectedAction, true)} className="hidden" />
+                  </label>
+                  {selectedAction.proofImageBase64 && (
+                    <div className="relative">
+                       <img src={selectedAction.proofImageBase64} alt="Preview" className="h-12 w-12 object-cover rounded border border-gray-300" />
+                       <button onClick={() => setSelectedAction({...selectedAction, proofImageBase64: ''})} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"><X size={12}/></button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">3. Catatan Singkat</label>
+                <textarea 
+                  value={selectedAction.proofNote || ''} 
+                  onChange={(e) => setSelectedAction({...selectedAction, proofNote: e.target.value})}
+                  placeholder="Misal: Dokumen sudah diserahkan ke admin..."
+                  className="w-full border border-gray-300 rounded p-2 text-sm h-20 focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+
+              <button 
+                onClick={saveFollowUp}
+                className="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-700 transition-colors mt-4 shadow-md flex justify-center items-center gap-2"
+              >
+                <Save size={18}/> Simpan Perubahan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
