@@ -31,7 +31,7 @@
             .print-exact { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
         }
         /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: #f1f1f1; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
@@ -70,8 +70,8 @@
             return acc;
         }, {});
 
-        // --- URL DATABASE (GANTI DENGAN URL DEPLOYMENT BARU) ---
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbxM0ftIZ9aKkCOu_19OgD1ZxJtmDw434moCfkubMgud_ihedxfRpncPFzodkH0aIYO6ww/exec";
+        // --- URL DATABASE BARU ---
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbz4Z4cZxWkFbB_lZrCBiV6COK94plER9Cc0cf1kjtoiPNkat360OwDENNDwyG3oEy2oOw/exec";
 
         const TEAM_MEMBERS = [
             { name: 'Ageng Prasongko', role: 'Ketua Koperasi', phone: '6285248995995' },
@@ -113,7 +113,7 @@
             const [selectedAction, setSelectedAction] = useState(null);
             const [selectedMomId, setSelectedMomId] = useState(null);
             const [broadcastModalOpen, setBroadcastModalOpen] = useState(false);
-            const [isFileUploading, setIsFileUploading] = useState(false); // State proses upload ke Drive
+            const [isFileUploading, setIsFileUploading] = useState(false);
 
             // --- FETCH DATA ---
             const fetchMoms = async () => {
@@ -258,7 +258,7 @@
                                 ...selectedAction, 
                                 proofFileUrl: result.url, 
                                 proofFileName: file.name,
-                                proofImageBase64: null // Hapus versi lama jika sebelumnya pakai base64
+                                proofImageBase64: null
                             });
                         } else {
                             alert("Gagal upload file: " + result.message);
@@ -473,6 +473,7 @@
                         {activeTab === 'dashboard' && (
                         <div className="space-y-6 print:hidden">
                             
+                            {/* Header & Filter (Responsive Stacking) */}
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-end border-b pb-4 gap-4">
                                 <div className="w-full md:w-auto">
                                     <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Dashboard Interaktif</h1>
@@ -495,6 +496,7 @@
                                 </div>
                             </div>
 
+                            {/* KPI Cards (Mobile grid 2, Desktop grid 4) */}
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                                 <div className="bg-white p-4 md:p-5 rounded-xl border-l-4 border-l-blue-500 shadow-sm"><p className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Total Tugas</p><p className="text-2xl md:text-3xl font-bold text-blue-600 mt-1">{displayedTasks.length}</p></div>
                                 <div className="bg-white p-4 md:p-5 rounded-xl border-l-4 border-l-green-500 shadow-sm"><p className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Selesai</p><p className="text-2xl md:text-3xl font-bold text-green-600 mt-1">{displayedTasks.filter(t => t.status === '3').length}</p></div>
@@ -502,12 +504,14 @@
                                 <div className="bg-white p-4 md:p-5 rounded-xl border-l-4 border-l-red-500 shadow-sm"><p className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Overdue / ASAP</p><p className="text-2xl md:text-3xl font-bold text-red-600 mt-1">{overdueTasks.length}</p></div>
                             </div>
 
+                            {/* DAFTAR TUGAS */}
                             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div className="p-4 md:p-5 border-b bg-gray-50 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                                     <h2 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Icons.LayoutDashboard size={18}/> Daftar Tindak Lanjut</h2>
                                     {canViewScorecard && <button onClick={() => setBroadcastModalOpen(true)} className="w-full sm:w-auto bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-green-700 flex justify-center items-center gap-2 shadow-sm"><Icons.Broadcast size={14}/> Broadcast Overdue</button>}
                                 </div>
                                 
+                                {/* View untuk Mobile (Card Format) */}
                                 <div className="block md:hidden divide-y divide-gray-100">
                                     {displayedTasks.map((task, i) => {
                                         const risk = checkDueDateRisk(task.deadline, task.status);
@@ -575,7 +579,7 @@
                                     {displayedTasks.length === 0 && <div className="text-center py-10 text-gray-400 text-sm">Tidak ada tugas ditemukan.</div>}
                                 </div>
 
-                                {/* Desktop View */}
+                                {/* View untuk Desktop (Table Format) */}
                                 <div className="hidden md:block overflow-x-auto">
                                     <table className="w-full text-sm text-left">
                                         <thead className="bg-gray-100 text-gray-600 uppercase text-[11px] tracking-wider">
@@ -643,11 +647,13 @@
                                 </div>
                             </div>
 
+                            {/* REKAP YTD BERSAMA (Card untuk Mobile, Table untuk Desktop) */}
                             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-8">
                                 <div className="p-4 md:p-5 border-b bg-gray-50 font-bold text-lg flex items-center gap-2 text-gray-800">
                                     <Icons.ChartBar size={20}/> Insight & Rekap Pertemuan (YTD)
                                 </div>
                                 <div className="p-0 md:p-5">
+                                    {/* Alert Overdue */}
                                     {draggingTasks.length > 0 && (
                                     <div className="m-4 md:m-0 md:mb-6 bg-red-50 border-l-4 border-red-600 p-4 rounded-r shadow-sm">
                                         <h3 className="font-bold text-red-800 mb-2 flex items-center gap-2 text-sm md:text-base"><Icons.AlertTriangle size={18}/> Perhatian: Tugas Berlarut-larut</h3>
@@ -664,6 +670,7 @@
                                     </div>
                                     )}
                                     
+                                    {/* YTD Mobile View */}
                                     <div className="block md:hidden divide-y divide-gray-100">
                                         {ytdSummary.map((item, i) => (
                                             <div key={i} className="p-4 hover:bg-gray-50">
@@ -689,6 +696,7 @@
                                         {ytdSummary.length === 0 && <div className="text-center py-6 text-gray-500 text-sm">Belum ada data YTD.</div>}
                                     </div>
 
+                                    {/* YTD Desktop View */}
                                     <div className="hidden md:block overflow-x-auto border rounded-lg">
                                         <table className="w-full text-sm text-left">
                                             <thead className="bg-gray-50 text-gray-700 uppercase text-[11px] tracking-wider">
@@ -734,6 +742,7 @@
                                 </div>
                             </div>
 
+                            {/* ARSIP MOM */}
                             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-8">
                                 <div className="p-4 md:p-5 border-b bg-gray-50 font-bold text-lg flex items-center gap-2 text-gray-800"><Icons.History size={20}/> Arsip Minutes of Meeting</div>
                                 <div className="p-4 md:p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-5">
@@ -761,7 +770,7 @@
                         )}
 
                         {/* ==================================================== 
-                            TAB: SCORECARD 
+                            TAB: SCORECARD & LAPORAN 
                         ==================================================== */}
                         {activeTab === 'scorecard' && (
                             <div className="bg-white p-4 sm:p-8 rounded-xl shadow-sm border max-w-5xl mx-auto print:shadow-none print:border-none print:p-0">
@@ -790,6 +799,7 @@
 
                                 <h3 className="font-bold text-lg mb-4 break-before-page text-gray-800">Rincian Pertemuan (Year to Date)</h3>
                                 
+                                {/* Scorecard YTD Mobile */}
                                 <div className="block sm:hidden divide-y divide-gray-200 border-t border-b">
                                     {moms.map((mom, i) => {
                                         const mTasks = mom.actions || [];
@@ -808,6 +818,7 @@
                                     )})}
                                 </div>
 
+                                {/* Scorecard YTD Desktop */}
                                 <div className="hidden sm:block overflow-x-auto border rounded-xl">
                                     <table className="w-full text-sm text-left">
                                         <thead className="bg-gray-100 text-gray-700 uppercase text-xs">
@@ -868,7 +879,7 @@
                         )}
 
                         {/* ==================================================== 
-                            TAB: FORM INPUT MOM
+                            TAB: FORM INPUT MOM (Admin/Sekretaris)
                         ==================================================== */}
                         {activeTab === 'form' && canEditMOM && (
                             <div className="bg-white p-4 sm:p-8 rounded-xl shadow-sm max-w-4xl mx-auto space-y-8 print:hidden border-t-4 border-t-blue-600">
@@ -955,6 +966,31 @@
                                         <Icons.Plus size={16}/> Tambah Kolom Tugas Baru
                                     </button>
                                 </div>
+
+                                <div className="border border-gray-200 rounded-xl p-4 sm:p-5 bg-white shadow-sm">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-4">
+                                        <div className="flex items-center gap-2">
+                                            <Icons.Camera className="text-gray-500" size={18}/>
+                                            <div>
+                                                <h3 className="font-bold text-gray-800 text-lg">Foto Dokumentasi Rapat</h3>
+                                                <p className="text-xs text-gray-500 font-normal mt-0.5">Lampiran ini akan muncul di halaman 3 PDF.</p>
+                                            </div>
+                                        </div>
+                                        <label className="w-full sm:w-auto text-blue-700 hover:text-blue-800 flex items-center justify-center gap-2 text-sm font-bold cursor-pointer bg-blue-50 px-5 py-2.5 rounded-lg border border-blue-200 hover:bg-blue-100 transition-colors shadow-sm">
+                                            <Icons.Upload size={16}/> Upload Foto Rapat
+                                            <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, null, false)} className="hidden" />
+                                        </label>
+                                    </div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+                                        {docs.map(doc => (
+                                        <div key={doc.id} className="relative border border-gray-200 p-3 rounded-xl bg-gray-50 shadow-sm">
+                                            <button onClick={() => removeDoc(doc.id)} className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full shadow hover:bg-red-600 transition-colors"><Icons.X size={14} /></button>
+                                            <img src={doc.url} alt="Dok" className="w-full h-32 object-cover rounded-lg mb-3 border border-gray-200 shadow-inner" />
+                                            <input type="text" placeholder="Tulis keterangan foto di sini..." value={doc.description} onChange={(e) => updateDocDesc(doc.id, e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-blue-500"/>
+                                        </div>
+                                        ))}
+                                    </div>
+                                </div>
                                 
                                 <div className="pt-4 border-t border-gray-200">
                                     <button onClick={saveMom} className="w-full bg-blue-600 text-white px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-2 shadow-lg hover:bg-blue-700 transition-colors text-lg"><Icons.Save size={20}/> Simpan Semua Data MOM ke Sistem</button>
@@ -963,7 +999,7 @@
                         )}
 
                         {/* ==================================================== 
-                            TAB: PREVIEW PDF
+                            TAB: PREVIEW PDF (Print View)
                         ==================================================== */}
                         {activeTab === 'preview' && (
                         <div className="space-y-4">
@@ -973,6 +1009,8 @@
                             </div>
 
                             <div className="bg-white p-6 sm:p-10 shadow-lg sm:rounded-xl w-full max-w-4xl mx-auto print:shadow-none print:p-0 text-black">
+                                
+                                {/* Hal 1: MOM */}
                                 <div className="min-h-[297mm]">
                                     <div className="flex flex-col sm:flex-row items-center border-b-4 border-double border-black pb-4 mb-6 text-center sm:text-left gap-4 sm:gap-0">
                                         <img src="https://i.ibb.co.com/WvTwLMn5/image-1.png" alt="Logo" className="w-20 h-20 sm:w-24 sm:h-24 object-contain print-exact" />
@@ -1023,15 +1061,78 @@
                                         <div className="text-center text-xs sm:text-sm"><p>Dibuat Oleh,</p><div className="h-20 sm:h-24"></div><p className="font-bold underline">{meetingInfo.preparedBy}</p></div>
                                     </div>
                                 </div>
+
+                                {/* Hal 2: ABSENSI */}
+                                <div className="min-h-[297mm] break-before-page pt-10 print:pt-0">
+                                    <div className="flex flex-col sm:flex-row items-center border-b-4 border-double border-black pb-4 mb-6 text-center sm:text-left gap-4 sm:gap-0">
+                                        <img src="https://i.ibb.co.com/WvTwLMn5/image-1.png" alt="Logo" className="w-20 h-20 sm:w-24 sm:h-24 object-contain print-exact" />
+                                        <div className="flex-1 sm:px-4 text-center">
+                                            <h1 className="text-lg sm:text-xl font-bold uppercase text-blue-900 print-exact">Koperasi Karyawan Adaro Karya Mandiri</h1>
+                                            <p className="text-xs sm:text-sm font-bold mt-1">Badan Hukum Nomor : 2128/BH/IX Tanggal 31 Juli 1995</p>
+                                        </div>
+                                        <div className="w-24 hidden sm:block"></div> 
+                                    </div>
+                                    <h2 className="text-center text-base sm:text-lg font-bold underline mb-6 uppercase tracking-widest">DAFTAR HADIR</h2>
+                                    <table className="w-full mb-6 text-xs sm:text-sm">
+                                        <tbody>
+                                            <tr><td className="w-24 sm:w-32 py-1 font-bold align-top">Agenda</td><td className="w-4 align-top">:</td><td className="uppercase">{meetingInfo.agenda}</td></tr>
+                                            <tr><td className="py-1 font-bold align-top">Tanggal</td><td className="align-top">:</td><td>{meetingInfo.date}</td></tr>
+                                            <tr><td className="py-1 font-bold align-top">Waktu</td><td className="align-top">:</td><td>{meetingInfo.time}</td></tr>
+                                            <tr><td className="py-1 font-bold align-top">Tempat</td><td className="align-top">:</td><td>{meetingInfo.location}</td></tr>
+                                        </tbody>
+                                    </table>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-xs sm:text-sm border-collapse border border-black mt-4 sm:mt-8 min-w-[500px]">
+                                            <thead className="bg-gray-100 text-center print-exact">
+                                                <tr><th className="border border-black py-3 px-2 w-10">No</th><th className="border border-black py-3 px-2 w-1/3">Nama</th><th className="border border-black py-3 px-2 w-1/3">Jabatan</th><th className="border border-black py-3 px-2 w-1/4">Tanda Tangan</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                {attendees.map((a, i) => {
+                                                    const role = TEAM_MEMBERS.find(m => m.name.toLowerCase() === (a.name || '').toLowerCase().trim())?.role || '';
+                                                    return (
+                                                    <tr key={a.id}>
+                                                        <td className="border border-black py-4 px-2 text-center align-middle font-bold">{i + 1}</td>
+                                                        <td className="border border-black py-4 px-2 align-middle font-bold uppercase">{a.name}</td>
+                                                        <td className="border border-black py-4 px-2 align-middle uppercase text-gray-700">{role}</td>
+                                                        <td className="border border-black py-4 px-2 relative h-12 sm:h-16"><span className={`absolute top-2 text-[10px] sm:text-xs font-bold text-gray-400 ${i % 2 === 0 ? 'left-2' : 'left-1/2'}`}>{i + 1}.</span></td>
+                                                    </tr>
+                                                )})}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                {/* Hal 3: DOKUMENTASI */}
+                                {docs.length > 0 && (
+                                <div className="min-h-[297mm] break-before-page pt-10 print:pt-0">
+                                    <div className="flex flex-col sm:flex-row items-center border-b-4 border-double border-black pb-4 mb-6 text-center sm:text-left gap-4 sm:gap-0">
+                                        <img src="https://i.ibb.co.com/WvTwLMn5/image-1.png" alt="Logo" className="w-20 h-20 sm:w-24 sm:h-24 object-contain print-exact" />
+                                        <div className="flex-1 sm:px-4 text-center">
+                                            <h1 className="text-lg sm:text-xl font-bold uppercase text-blue-900 print-exact">Koperasi Karyawan Adaro Karya Mandiri</h1>
+                                        </div>
+                                        <div className="w-24 hidden sm:block"></div> 
+                                    </div>
+                                    <h2 className="text-center text-base sm:text-lg font-bold underline mb-6 uppercase tracking-widest">DOKUMENTASI RAPAT</h2>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 mt-6 sm:mt-10">
+                                        {docs.map((doc, i) => (
+                                        <div key={doc.id} className="border-2 border-gray-300 p-2 text-center break-inside-avoid shadow-sm bg-white">
+                                            <img src={doc.url} alt={`Dokumentasi ${i+1}`} className="w-full h-48 sm:h-64 object-cover mb-3 rounded-sm border border-gray-200" />
+                                            <p className="text-xs sm:text-sm font-bold uppercase border-t pt-2 text-gray-800">{doc.description || `FOTO KEGIATAN ${i+1}`}</p>
+                                        </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                )}
                             </div>
                         </div>
                         )}
                     </div>
 
                     {/* ==================================================== 
-                        MODALS
+                        MODALS (Login, Update, Broadcast)
                     ==================================================== */}
                     
+                    {/* Login Modal */}
                     {loginModalOpen && (
                         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 print:hidden backdrop-blur-sm">
                             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden transform transition-all border border-gray-200">
@@ -1048,6 +1149,7 @@
                         </div>
                     )}
 
+                    {/* Broadcast Modal */}
                     {broadcastModalOpen && (
                         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 print:hidden backdrop-blur-sm">
                             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col border border-gray-200">
@@ -1081,6 +1183,7 @@
                         </div>
                     )}
 
+                    {/* Follow Up Modal */}
                     {isFollowUpModalOpen && selectedAction && (
                         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4 print:hidden backdrop-blur-sm">
                             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden max-h-[90vh] flex flex-col border border-gray-200">
