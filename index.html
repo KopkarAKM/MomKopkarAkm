@@ -129,11 +129,12 @@
 
             const handleCarryOverMom = (mom) => {
                 const unfinishedTasks = (mom.actions || []).filter(a => a.status !== '3').map((a, idx) => {
-                    let newTopic = a.topic;
-                    // Beri penanda otomatis untuk tugas yang sama sekali belum di-follow up (Status 1)
-                    if (a.status === '1' && !newTopic.includes('[Bahan PICA]')) {
-                        const prevDate = mom.meetingInfo.date ? `(${mom.meetingInfo.date})` : '';
-                        newTopic = `${newTopic}\n\n[Bahan PICA]: Tugas dari MOM sebelumnya ${prevDate} belum dieksekusi. Wajib evaluasi kendala & solusinya.`;
+                    let newTopic = a.topic || ''; // Mencegah error jika data topik kosong
+                    
+                    // Memastikan cek status menggunakan format angka maupun teks
+                    if ((a.status == '1') && !newTopic.includes('[Bahan PICA]')) {
+                        const prevDate = mom.meetingInfo?.date ? `(${mom.meetingInfo.date})` : '';
+                        newTopic = `${newTopic}\n\n[Bahan PICA]: Tugas dari MOM sebelumnya ${prevDate} belum dieksekusi. Wajib evaluasi kendala & solusinya.`.trim();
                     }
                     return {
                         ...a,
@@ -637,7 +638,7 @@
                                 {actions.map((action) => (
                                     <div key={action.id} className="p-3 border rounded bg-gray-50 mb-3 relative">
                                     <button onClick={() => removeAction(action.id)} className="absolute top-2 right-2 text-red-500"><Trash2 size={16}/></button>
-                                    <textarea value={action.topic} onChange={(e) => updateAction(action.id, 'topic', e.target.value)} className="w-full border rounded p-2 text-sm h-16 mb-2" placeholder="Topik / Masalah"/>
+                                    <textarea value={action.topic} onChange={(e) => updateAction(action.id, 'topic', e.target.value)} className="w-full border rounded p-2 text-sm h-32 mb-2" placeholder="Topik / Masalah"/>
                                     <div className="grid grid-cols-3 gap-2">
                                         <input type="date" value={action.deadline} onChange={(e) => updateAction(action.id, 'deadline', e.target.value)} className="border rounded p-2 text-sm" title="Pilih Batas Waktu"/>
                                         <input type="text" list="team-list" value={action.pic} onChange={(e) => updateAction(action.id, 'pic', e.target.value)} className="border rounded p-2 text-sm" placeholder="Pilih / ketik PIC..."/>
