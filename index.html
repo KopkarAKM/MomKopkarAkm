@@ -8,14 +8,14 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- FontAwesome (Pengganti Lucide untuk versi HTML) -->
+    <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- React & ReactDOM -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
-    <!-- Babel (Untuk compile JSX di browser) -->
+    <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style type="text/tailwindcss">
@@ -38,7 +38,7 @@
     <script type="text/babel">
         const { useState, useEffect, useRef } = React;
 
-        // --- KONFIGURASI ICON (Menerjemahkan Lucide ke FontAwesome) ---
+        // --- KONFIGURASI ICON ---
         const IconMap = {
             Printer: "fas fa-print", Plus: "fas fa-plus", Trash2: "fas fa-trash-alt",
             Camera: "fas fa-camera", UserPlus: "fas fa-user-plus", LayoutDashboard: "fas fa-th-large",
@@ -47,7 +47,7 @@
             LinkIcon: "fas fa-link", X: "fas fa-times", AlertTriangle: "fas fa-exclamation-triangle",
             Calendar: "fas fa-calendar-alt", Upload: "fas fa-upload", RefreshCw: "fas fa-sync-alt",
             Copy: "fas fa-copy", Eye: "fas fa-eye", Download: "fas fa-download", Filter: "fas fa-filter",
-            PenTool: "fas fa-pen-nib", MessageCircle: "fab fa-whatsapp"
+            MessageCircle: "fab fa-whatsapp", Lock: "fas fa-lock", Unlock: "fas fa-unlock-alt"
         };
 
         const IconComponent = (name) => ({ size = 16, className = '' }) => (
@@ -65,7 +65,8 @@
         const Upload = IconComponent('Upload'); const RefreshCw = IconComponent('RefreshCw');
         const Copy = IconComponent('Copy'); const Eye = IconComponent('Eye');
         const Download = IconComponent('Download'); const Filter = IconComponent('Filter');
-        const PenTool = IconComponent('PenTool'); const MessageCircle = IconComponent('MessageCircle');
+        const MessageCircle = IconComponent('MessageCircle'); const Lock = IconComponent('Lock');
+        const Unlock = IconComponent('Unlock');
 
         // --- URL DATABASE & ANGGOTA TIM ---
         const GAS_URL = "https://script.google.com/macros/s/AKfycbxM0ftIZ9aKkCOu_19OgD1ZxJtmDw434moCfkubMgud_ihedxfRpncPFzodkH0aIYO6ww/exec";
@@ -86,6 +87,9 @@
         ];
 
         function App() {
+            // STATE MODE ADMIN
+            const [isAdmin, setIsAdmin] = useState(false);
+
             const [moms, setMoms] = useState([]);
             const [activeTab, setActiveTab] = useState('dashboard');
             const [isLoading, setIsLoading] = useState(true);
@@ -94,7 +98,7 @@
 
             const [currentMomId, setCurrentMomId] = useState('');
             const [meetingInfo, setMeetingInfo] = useState({
-                date: '', time: '', location: '', agenda: '', preparedBy: '', signature: ''
+                date: '', time: '', location: '', agenda: '', preparedBy: ''
             });
             const [attendees, setAttendees] = useState([{ id: Date.now(), name: '' }]);
             const [actions, setActions] = useState([]);
@@ -104,8 +108,22 @@
             const [selectedAction, setSelectedAction] = useState(null);
             const [selectedMomId, setSelectedMomId] = useState(null);
 
-            const canvasRef = useRef(null);
-            const [isDrawing, setIsDrawing] = useState(false);
+            // --- LOGIN ADMIN LOGIC ---
+            const handleAdminToggle = () => {
+                if (isAdmin) {
+                    setIsAdmin(false);
+                    alert("Berhasil keluar dari Mode Super Admin. Fitur edit telah dikunci.");
+                    if (activeTab === 'form') setActiveTab('dashboard');
+                } else {
+                    const pin = prompt("Masukkan PIN Super Admin:");
+                    if (pin === "AKM2026") { // <--- GANTI PIN DI SINI JIKA PERLU
+                        setIsAdmin(true);
+                        alert("Akses Super Admin dibuka! Anda sekarang bisa mengedit data.");
+                    } else if (pin !== null) {
+                        alert("PIN salah!");
+                    }
+                }
+            };
 
             const fetchMoms = async () => {
                 setIsLoading(true);
@@ -129,16 +147,14 @@
 
             const handleCarryOverMom = (mom) => {
                 const unfinishedTasks = (mom.actions || []).filter(a => a.status !== '3').map((a, idx) => {
-                    let newTopic = a.topic || ''; // Mencegah error jika data topik kosong
-                    
-                    // Memastikan cek status menggunakan format angka maupun teks
+                    let newTopic = a.topic || '';
                     if ((a.status == '1') && !newTopic.includes('[Bahan PICA]')) {
                         const prevDate = mom.meetingInfo?.date ? `(${mom.meetingInfo.date})` : '';
                         newTopic = `${newTopic}\n\n[Bahan PICA]: Tugas dari MOM sebelumnya ${prevDate} belum dieksekusi. Wajib evaluasi kendala & solusinya.`.trim();
                     }
                     return {
                         ...a,
-                        id: Date.now() + idx, // Reset ID agar tidak bentrok dengan data lama
+                        id: Date.now() + idx,
                         topic: newTopic
                     };
                 });
@@ -147,53 +163,12 @@
                 setMeetingInfo({ 
                     ...mom.meetingInfo, 
                     date: '', time: '', 
-                    agenda: `Review / Lanjutan: ${mom.meetingInfo.agenda}`,
-                    signature: '' 
+                    agenda: `Review / Lanjutan: ${mom.meetingInfo.agenda}`
                 });
                 setActions(unfinishedTasks);
                 setDocs([]);
                 setAttendees([{ id: Date.now(), name: '' }]);
                 setActiveTab('form');
-            };
-
-            const startDrawing = (e) => {
-                const canvas = canvasRef.current;
-                if (!canvas) return;
-                const ctx = canvas.getContext('2d');
-                const rect = canvas.getBoundingClientRect();
-                const x = (e.clientX || e.touches[0].clientX) - rect.left;
-                const y = (e.clientY || e.touches[0].clientY) - rect.top;
-                ctx.beginPath();
-                ctx.moveTo(x, y);
-                setIsDrawing(true);
-            };
-
-            const draw = (e) => {
-                if (!isDrawing) return;
-                e.preventDefault();
-                const canvas = canvasRef.current;
-                const ctx = canvas.getContext('2d');
-                const rect = canvas.getBoundingClientRect();
-                const x = (e.clientX || e.touches[0].clientX) - rect.left;
-                const y = (e.clientY || e.touches[0].clientY) - rect.top;
-                ctx.lineTo(x, y);
-                ctx.stroke();
-            };
-
-            const stopDrawing = () => {
-                setIsDrawing(false);
-                const canvas = canvasRef.current;
-                if (canvas) {
-                    setMeetingInfo({ ...meetingInfo, signature: canvas.toDataURL('image/png') });
-                }
-            };
-
-            const clearSignature = () => {
-                const canvas = canvasRef.current;
-                if (!canvas) return;
-                const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                setMeetingInfo({ ...meetingInfo, signature: '' });
             };
 
             const saveMom = async () => {
@@ -248,7 +223,7 @@
             const formatTanggalMembaca = (tgl) => {
                 if (!tgl) return '-';
                 const d = new Date(tgl);
-                if (isNaN(d.getTime())) return tgl; // Kembalikan string asli jika formatnya bukan tanggal (contoh: "ASAP")
+                if (isNaN(d.getTime())) return tgl;
                 return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
             };
 
@@ -289,7 +264,7 @@
 
             const resetForm = () => {
                 setCurrentMomId('');
-                setMeetingInfo({ date: '', time: '', location: '', agenda: '', preparedBy: '', signature: '' });
+                setMeetingInfo({ date: '', time: '', location: '', agenda: '', preparedBy: '' });
                 setAttendees([{ id: Date.now(), name: '' }]);
                 setActions([]); setDocs([]);
             };
@@ -352,11 +327,10 @@
                 const dlLower = deadline.toLowerCase();
                 if (dlLower.includes('asap') || dlLower.includes('segera')) return { label: 'ASAP', color: 'text-red-700', bg: 'bg-red-50' };
                 
-                // Pengecekan cerdas berbasis tanggal aktual (Format YYYY-MM-DD)
                 const dueDate = new Date(deadline);
                 if (!isNaN(dueDate.getTime())) {
                     const today = new Date();
-                    today.setHours(0, 0, 0, 0); // Nol-kan jam agar adil hitung selisih harinya
+                    today.setHours(0, 0, 0, 0);
                     
                     const diffTime = dueDate.getTime() - today.getTime();
                     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -366,7 +340,6 @@
                     return { label: 'Aman', color: 'text-gray-600', bg: 'bg-gray-50' };
                 }
 
-                // Fallback untuk data lama yang hanya berisi kata bulan (contoh "Maret")
                 const currentMonthNum = new Date().getMonth() + 1;
                 const months = ["januari", "februari", "maret", "april", "mei", "juni", "juli", "agustus", "september", "oktober", "november", "desember"];
                 const deadlineMonthIndex = months.findIndex(m => dlLower.includes(m));
@@ -417,9 +390,21 @@
                             <span className="font-bold text-lg tracking-tight">Kopkar AKM - Sistem MOM</span>
                             </div>
                             <div className="flex items-center space-x-4">
-                            <button onClick={fetchMoms} className="px-3 py-2 text-gray-400 hover:text-blue-600 transition-colors"><RefreshCw size={18} /></button>
-                            <button onClick={() => setActiveTab('dashboard')} className={`px-3 py-2 rounded-md text-sm font-bold transition-colors ${activeTab === 'dashboard' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>Dashboard</button>
-                            <button onClick={createNewMom} className={`px-3 py-2 rounded-md text-sm font-bold transition-colors ${activeTab === 'form' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}><span className="flex items-center gap-1"><Plus size={16}/> Buat Baru</span></button>
+                                <button onClick={fetchMoms} className="px-3 py-2 text-gray-400 hover:text-blue-600 transition-colors" title="Refresh Data"><RefreshCw size={18} /></button>
+                                <button onClick={() => setActiveTab('dashboard')} className={`px-3 py-2 rounded-md text-sm font-bold transition-colors ${activeTab === 'dashboard' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>Dashboard</button>
+                                
+                                {/* Tombol Buat Baru hanya muncul untuk Admin */}
+                                {isAdmin && (
+                                    <button onClick={createNewMom} className={`px-3 py-2 rounded-md text-sm font-bold transition-colors ${activeTab === 'form' ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}>
+                                        <span className="flex items-center gap-1"><Plus size={16}/> Buat Baru</span>
+                                    </button>
+                                )}
+
+                                {/* Tombol Gembok untuk Login/Logout Admin */}
+                                <button onClick={handleAdminToggle} className={`px-3 py-2 rounded-md text-sm font-bold transition-colors flex items-center gap-2 ${isAdmin ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`} title={isAdmin ? "Keluar Mode Admin" : "Masuk Mode Admin"}>
+                                    {isAdmin ? <Unlock size={16} /> : <Lock size={16} />}
+                                    {isAdmin ? "Admin Aktif" : "Login"}
+                                </button>
                             </div>
                         </div>
                         </div>
@@ -565,7 +550,10 @@
                                         {task.status !== '3' && (
                                             <button onClick={() => sendWhatsApp(task)} className="bg-green-100 text-green-700 p-1.5 rounded hover:bg-green-200" title="Ingatkan via WhatsApp"><MessageCircle size={16} /></button>
                                         )}
-                                        <button onClick={() => { setSelectedMomId(task.momId); setSelectedAction(task); setIsFollowUpModalOpen(true); }} className="bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-blue-700">Update</button>
+                                        {/* Tombol Update Progress hanya muncul untuk Admin */}
+                                        {isAdmin && (
+                                            <button onClick={() => { setSelectedMomId(task.momId); setSelectedAction(task); setIsFollowUpModalOpen(true); }} className="bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-bold hover:bg-blue-700">Update</button>
+                                        )}
                                         </td>
                                     </tr>
                                     )})}
@@ -585,11 +573,19 @@
                                     </div>
                                     <div className="space-y-2">
                                     <div className="flex gap-2">
-                                        <button onClick={() => loadMomForPreview(mom)} className="flex-1 bg-gray-100 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1"><Eye size={14}/> Cetak</button>
-                                        <button onClick={() => loadMomForEdit(mom)} className="flex-1 bg-gray-100 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1"><Edit size={14}/> Edit</button>
+                                        <button onClick={() => loadMomForPreview(mom)} className="flex-1 bg-gray-100 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 hover:bg-gray-200"><Eye size={14}/> Cetak</button>
+                                        {/* Tombol Edit hanya muncul untuk Admin */}
+                                        {isAdmin && (
+                                            <button onClick={() => loadMomForEdit(mom)} className="flex-1 bg-gray-100 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 hover:bg-gray-200"><Edit size={14}/> Edit</button>
+                                        )}
                                     </div>
-                                    <button onClick={() => handleCarryOverMom(mom)} className="w-full bg-blue-50 text-blue-700 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1"><Copy size={14}/> Jadikan Acuan Baru</button>
-                                    <button onClick={() => deleteMom(mom.id)} className="w-full text-red-500 py-1 rounded text-xs font-bold">Hapus Arsip</button>
+                                    {/* Tombol Acuan Baru dan Hapus hanya muncul untuk Admin */}
+                                    {isAdmin && (
+                                        <>
+                                        <button onClick={() => handleCarryOverMom(mom)} className="w-full bg-blue-50 text-blue-700 py-1.5 rounded text-xs font-bold flex items-center justify-center gap-1 hover:bg-blue-100"><Copy size={14}/> Jadikan Acuan Baru</button>
+                                        <button onClick={() => deleteMom(mom.id)} className="w-full text-red-500 py-1 rounded text-xs font-bold hover:bg-red-50">Hapus Arsip</button>
+                                        </>
+                                    )}
                                     </div>
                                 </div>
                                 ))}
@@ -598,7 +594,7 @@
                         </div>
                         )}
 
-                        {activeTab === 'form' && (
+                        {activeTab === 'form' && isAdmin && (
                         <div className="bg-white p-6 rounded shadow max-w-4xl mx-auto space-y-6 print:hidden">
                             <div className="flex justify-between items-center border-b pb-4">
                             <h2 className="text-xl font-bold">{currentMomId ? 'Edit MOM' : 'Buat MOM Baru'}</h2>
@@ -613,7 +609,6 @@
                             <div><label className="block text-sm font-bold text-gray-700 mb-1">Pembuat MOM</label><input type="text" name="preparedBy" value={meetingInfo.preparedBy} onChange={handleInfoChange} className="w-full border rounded p-2" /></div>
                             </div>
 
-                            {/* BAGIAN DAFTAR HADIR (Tombol di Bawah) */}
                             <div>
                                 <div className="bg-gray-50 p-2 rounded mb-2">
                                     <h3 className="font-bold text-gray-700">Daftar Hadir</h3>
@@ -630,7 +625,6 @@
                                 </button>
                             </div>
 
-                            {/* BAGIAN TINDAK LANJUT (Tombol di Bawah & Input Date) */}
                             <div>
                                 <div className="bg-gray-50 p-2 rounded mb-2">
                                     <h3 className="font-bold text-gray-700">Tindak Lanjut</h3>
@@ -651,27 +645,6 @@
                                 <button onClick={addAction} className="mt-2 text-blue-600 font-bold text-sm flex items-center justify-center gap-1 w-full border-2 border-dashed border-blue-200 py-3 rounded-lg hover:bg-blue-50 transition-colors">
                                     <Plus size={14}/> Tambah Task
                                 </button>
-                            </div>
-
-                            <div className="border border-gray-300 rounded p-4">
-                            <h3 className="font-bold text-gray-700 mb-2 flex items-center gap-2"><PenTool size={18}/> Tanda Tangan Pembuat MOM</h3>
-                            <div className="bg-gray-100 border-2 border-dashed border-gray-300 rounded flex justify-center items-center relative" style={{ touchAction: 'none' }}>
-                                {meetingInfo.signature ? (
-                                <div className="relative">
-                                    <img src={meetingInfo.signature} alt="Tanda Tangan" className="h-32 object-contain" />
-                                    <button onClick={clearSignature} className="absolute top-0 right-0 bg-red-500 text-white p-1 rounded-full text-xs">Ulangi</button>
-                                </div>
-                                ) : (
-                                <canvas 
-                                    ref={canvasRef}
-                                    width={400} height={150}
-                                    className="bg-white cursor-crosshair w-full max-w-[400px]"
-                                    onMouseDown={startDrawing} onMouseMove={draw} onMouseUp={stopDrawing} onMouseOut={stopDrawing}
-                                    onTouchStart={startDrawing} onTouchMove={draw} onTouchEnd={stopDrawing}
-                                />
-                                )}
-                            </div>
-                            {!meetingInfo.signature && <p className="text-xs text-gray-500 text-center mt-2">Goreskan tanda tangan di atas kotak putih ini</p>}
                             </div>
 
                             <div className="border border-gray-300 rounded p-4 mt-4">
@@ -780,11 +753,7 @@
                                 <div className="mt-16 flex justify-end break-inside-avoid">
                                 <div className="text-center text-sm">
                                     <p>Dibuat Oleh,</p>
-                                    {meetingInfo.signature ? (
-                                        <div className="h-24 flex items-center justify-center">
-                                        <img src={meetingInfo.signature} alt="TTD" className="h-20" />
-                                        </div>
-                                    ) : <div className="h-24"></div>}
+                                    <div className="h-24"></div>
                                     <p className="font-bold underline">{meetingInfo.preparedBy}</p>
                                 </div>
                                 </div>
@@ -885,7 +854,7 @@
                         )}
                     </div>
 
-                    {isFollowUpModalOpen && selectedAction && (
+                    {isFollowUpModalOpen && selectedAction && isAdmin && (
                         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 print:hidden">
                         <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
                             <div className="p-4 border-b flex justify-between items-center bg-gray-50">
