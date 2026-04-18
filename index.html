@@ -231,6 +231,13 @@
                 }
             };
 
+            const formatTanggalMembaca = (tgl) => {
+                if (!tgl) return '-';
+                const d = new Date(tgl);
+                if (isNaN(d.getTime())) return tgl; // Kembalikan string asli jika formatnya bukan tanggal (contoh: "ASAP")
+                return d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+            };
+
             const exportToCSV = (tasksToExport) => {
                 const headers = ['Agenda', 'Tanggal', 'Topik', 'PIC', 'Batas Waktu', 'Status', 'Catatan Bukti'];
                 const rows = tasksToExport.map(t => [
@@ -238,7 +245,7 @@
                     t.momDate || '',
                     `"${t.topic || ''}"`,
                     t.pic || '',
-                    t.deadline || '',
+                    `"${formatTanggalMembaca(t.deadline)}"`,
                     t.status === '1' ? 'Belum' : t.status === '2' ? 'Progress' : 'Selesai',
                     `"${t.proofNote || ''}"`
                 ]);
@@ -256,7 +263,7 @@
                 const picName = task.pic || '';
                 const member = TEAM_MEMBERS.find(m => m.name.toLowerCase() === picName.toLowerCase().trim());
                 
-                const text = `Halo ${task.pic}, sekadar mengingatkan terkait tugas MOM: \n\nAgenda: *${task.momAgenda}*\nTopik: *${task.topic}*\nBatas Waktu: *${task.deadline}*\n\nMohon segera di-update progressnya. Terima kasih.`;
+                const text = `Halo ${task.pic}, sekadar mengingatkan terkait tugas MOM: \n\nAgenda: *${task.momAgenda}*\nTopik: *${task.topic}*\nBatas Waktu: *${formatTanggalMembaca(task.deadline)}*\n\nMohon segera di-update progressnya. Terima kasih.`;
                 
                 let waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
                 if (member && member.phone) {
@@ -327,13 +334,30 @@
             const checkDueDateRisk = (deadline, status) => {
                 if (status === '3') return { label: 'Selesai', color: 'text-green-600', bg: 'bg-green-50' };
                 if (!deadline) return { label: 'Aman', color: 'text-gray-600', bg: 'bg-gray-50' };
+                
                 const dlLower = deadline.toLowerCase();
                 if (dlLower.includes('asap') || dlLower.includes('segera')) return { label: 'ASAP', color: 'text-red-700', bg: 'bg-red-50' };
                 
+                // Pengecekan cerdas berbasis tanggal aktual (Format YYYY-MM-DD)
+                const dueDate = new Date(deadline);
+                if (!isNaN(dueDate.getTime())) {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0); // Nol-kan jam agar adil hitung selisih harinya
+                    
+                    const diffTime = dueDate.getTime() - today.getTime();
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                    if (diffDays < 0) return { label: 'Overdue', color: 'text-red-700', bg: 'bg-red-50' };
+                    if (diffDays <= 3) return { label: 'Mendekati', color: 'text-yellow-700', bg: 'bg-yellow-50' };
+                    return { label: 'Aman', color: 'text-gray-600', bg: 'bg-gray-50' };
+                }
+
+                // Fallback untuk data lama yang hanya berisi kata bulan (contoh "Maret")
                 const currentMonthNum = new Date().getMonth() + 1;
                 const months = ["januari", "februari", "maret", "april", "mei", "juni", "juli", "agustus", "september", "oktober", "november", "desember"];
                 const deadlineMonthIndex = months.findIndex(m => dlLower.includes(m));
                 if (deadlineMonthIndex !== -1 && deadlineMonthIndex < currentMonthNum - 1) return { label: 'Overdue', color: 'text-red-700', bg: 'bg-red-50' };
+                
                 return { label: 'Mendekati', color: 'text-yellow-700', bg: 'bg-yellow-50' };
             };
 
@@ -511,7 +535,7 @@
                                         </td>
                                         <td className="px-4 py-3 font-bold text-gray-700">{task.pic || '-'}</td>
                                         <td className="px-4 py-3">
-                                        <div className="text-sm font-bold">{task.deadline || '-'}</div>
+                                        <div className="text-sm font-bold">{formatTanggalMembaca(task.deadline)}</div>
                                         <div className={`text-xs mt-0.5 font-bold ${risk.color}`}>{risk.label}</div>
                                         </td>
                                         <td className="px-4 py-3">
@@ -575,38 +599,44 @@
                             <div><label className="block text-sm font-bold text-gray-700 mb-1">Pembuat MOM</label><input type="text" name="preparedBy" value={meetingInfo.preparedBy} onChange={handleInfoChange} className="w-full border rounded p-2" /></div>
                             </div>
 
+                            {/* BAGIAN DAFTAR HADIR (Tombol di Bawah) */}
                             <div>
-                            <div className="flex justify-between items-center bg-gray-50 p-2 rounded mb-2">
-                                <h3 className="font-bold text-gray-700">Daftar Hadir</h3>
-                                <button onClick={addAttendee} className="text-blue-600 font-bold text-sm"><Plus size={14}/> Tambah</button>
-                            </div>
-                            {attendees.map((a, i) => (
-                                <div key={a.id} className="flex gap-2 mb-2">
-                                <span className="p-2 text-gray-500 font-bold">{i + 1}.</span>
-                                <input type="text" list="team-list" value={a.name} onChange={(e) => updateAttendee(a.id, e.target.value)} className="flex-1 border rounded p-2" placeholder="Pilih dari daftar atau ketik manual..."/>
-                                <button onClick={() => removeAttendee(a.id)} className="text-red-500 p-2"><Trash2 size={18}/></button>
+                                <div className="bg-gray-50 p-2 rounded mb-2">
+                                    <h3 className="font-bold text-gray-700">Daftar Hadir</h3>
                                 </div>
-                            ))}
+                                {attendees.map((a, i) => (
+                                    <div key={a.id} className="flex gap-2 mb-2">
+                                    <span className="p-2 text-gray-500 font-bold">{i + 1}.</span>
+                                    <input type="text" list="team-list" value={a.name} onChange={(e) => updateAttendee(a.id, e.target.value)} className="flex-1 border rounded p-2" placeholder="Pilih dari daftar atau ketik manual..."/>
+                                    <button onClick={() => removeAttendee(a.id)} className="text-red-500 p-2"><Trash2 size={18}/></button>
+                                    </div>
+                                ))}
+                                <button onClick={addAttendee} className="mt-2 text-blue-600 font-bold text-sm flex items-center justify-center gap-1 w-full border-2 border-dashed border-blue-200 py-3 rounded-lg hover:bg-blue-50 transition-colors">
+                                    <Plus size={14}/> Tambah Peserta
+                                </button>
                             </div>
 
+                            {/* BAGIAN TINDAK LANJUT (Tombol di Bawah & Input Date) */}
                             <div>
-                            <div className="flex justify-between items-center bg-gray-50 p-2 rounded mb-2">
-                                <h3 className="font-bold text-gray-700">Tindak Lanjut</h3>
-                                <button onClick={addAction} className="text-blue-600 font-bold text-sm"><Plus size={14}/> Tambah Task</button>
-                            </div>
-                            {actions.map((action) => (
-                                <div key={action.id} className="p-3 border rounded bg-gray-50 mb-3 relative">
-                                <button onClick={() => removeAction(action.id)} className="absolute top-2 right-2 text-red-500"><Trash2 size={16}/></button>
-                                <textarea value={action.topic} onChange={(e) => updateAction(action.id, 'topic', e.target.value)} className="w-full border rounded p-2 text-sm h-16 mb-2" placeholder="Topik / Masalah"/>
-                                <div className="grid grid-cols-3 gap-2">
-                                    <input type="text" value={action.deadline} onChange={(e) => updateAction(action.id, 'deadline', e.target.value)} className="border rounded p-2 text-sm" placeholder="Batas Waktu (Bulan/ASAP)"/>
-                                    <input type="text" list="team-list" value={action.pic} onChange={(e) => updateAction(action.id, 'pic', e.target.value)} className="border rounded p-2 text-sm" placeholder="Pilih atau ketik PIC..."/>
-                                    <select value={action.status} onChange={(e) => updateAction(action.id, 'status', e.target.value)} className="border rounded p-2 text-sm font-bold">
-                                    <option value="1">Belum</option><option value="2">Progress</option><option value="3">Selesai</option>
-                                    </select>
+                                <div className="bg-gray-50 p-2 rounded mb-2">
+                                    <h3 className="font-bold text-gray-700">Tindak Lanjut</h3>
                                 </div>
-                                </div>
-                            ))}
+                                {actions.map((action) => (
+                                    <div key={action.id} className="p-3 border rounded bg-gray-50 mb-3 relative">
+                                    <button onClick={() => removeAction(action.id)} className="absolute top-2 right-2 text-red-500"><Trash2 size={16}/></button>
+                                    <textarea value={action.topic} onChange={(e) => updateAction(action.id, 'topic', e.target.value)} className="w-full border rounded p-2 text-sm h-16 mb-2" placeholder="Topik / Masalah"/>
+                                    <div className="grid grid-cols-3 gap-2">
+                                        <input type="date" value={action.deadline} onChange={(e) => updateAction(action.id, 'deadline', e.target.value)} className="border rounded p-2 text-sm" title="Pilih Batas Waktu"/>
+                                        <input type="text" list="team-list" value={action.pic} onChange={(e) => updateAction(action.id, 'pic', e.target.value)} className="border rounded p-2 text-sm" placeholder="Pilih / ketik PIC..."/>
+                                        <select value={action.status} onChange={(e) => updateAction(action.id, 'status', e.target.value)} className="border rounded p-2 text-sm font-bold">
+                                        <option value="1">Belum</option><option value="2">Progress</option><option value="3">Selesai</option>
+                                        </select>
+                                    </div>
+                                    </div>
+                                ))}
+                                <button onClick={addAction} className="mt-2 text-blue-600 font-bold text-sm flex items-center justify-center gap-1 w-full border-2 border-dashed border-blue-200 py-3 rounded-lg hover:bg-blue-50 transition-colors">
+                                    <Plus size={14}/> Tambah Task
+                                </button>
                             </div>
 
                             <div className="border border-gray-300 rounded p-4">
@@ -722,7 +752,7 @@
                                         <tr key={a.id}>
                                         <td className="border border-black py-2 px-2 text-center align-top">{i + 1}</td>
                                         <td className="border border-black py-2 px-2 align-top whitespace-pre-wrap">{a.topic}</td>
-                                        <td className="border border-black py-2 px-2 text-center align-top">{a.deadline}</td>
+                                        <td className="border border-black py-2 px-2 text-center align-top">{formatTanggalMembaca(a.deadline)}</td>
                                         <td className="border border-black py-2 px-2 text-center align-top">{a.pic}</td>
                                         <td className="border border-black py-2 px-2 text-center align-top font-bold">
                                             {a.status === '1' ? 'Belum' : a.status === '2' ? 'Progress' : 'Selesai'}
