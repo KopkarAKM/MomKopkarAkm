@@ -793,7 +793,14 @@
                             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-8">
                                 <div className="p-4 md:p-5 border-b bg-gray-50 font-bold text-lg flex items-center gap-2 text-gray-800"><Icons.History size={20}/> Arsip Minutes of Meeting</div>
                                 <div className="p-4 md:p-5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-5">
-                                    {moms.filter(m => !searchTerm || m.meetingInfo.agenda.toLowerCase().includes(searchTerm.toLowerCase())).map(mom => (
+                                    {moms.filter(m => {
+                                        if (!searchTerm) return true;
+                                        const s = searchTerm.toLowerCase();
+                                        const matchAgenda = (m.meetingInfo?.agenda || '').toLowerCase().includes(s);
+                                        const matchDate = (m.meetingInfo?.date || '').toLowerCase().includes(s);
+                                        const matchPic = (m.actions || []).some(a => (a.pic || '').toLowerCase().includes(s));
+                                        return matchAgenda || matchDate || matchPic;
+                                    }).map(mom => (
                                     <div key={mom.id} className="border border-gray-200 rounded-xl p-4 flex flex-col justify-between hover:shadow-md hover:border-blue-300 transition-all bg-white group">
                                         <div>
                                             <div className="flex justify-between items-start mb-3">
