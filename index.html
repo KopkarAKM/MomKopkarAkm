@@ -95,6 +95,7 @@
             const [isLoading, setIsLoading] = useState(true);
             const [searchTerm, setSearchTerm] = useState('');
             const [selectedPicFilter, setSelectedPicFilter] = useState('All');
+            const [hideCompleted, setHideCompleted] = useState(true);
 
             // --- STATE AUTH / ROLE ---
             const [currentUser, setCurrentUser] = useState(null);
@@ -170,11 +171,24 @@
             const handleCarryOverMom = (mom) => {
                 const unfinishedTasks = (mom.actions || []).filter(a => a.status !== '3').map((a, idx) => {
                     let newTopic = a.topic || '';
-                    if ((a.status === '1') && !newTopic.includes('[Bahan PICA]')) {
-                        const prevDate = mom.meetingInfo?.date ? `(${mom.meetingInfo.date})` : '';
-                        newTopic = `${newTopic}\n\n[Bahan PICA]: Tugas MOM ${prevDate} belum dieksekusi. Evaluasi kendala & solusi.`.trim();
+                    const prevDate = mom.meetingInfo?.date ? mom.meetingInfo.date : 'Sebelumnya';
+                    
+                    newTopic = newTopic.replace(/\[Bahan PICA[^\]]*\]\s*/g, '').replace(/\[Lanjutan Progress[^\]]*\]\s*/g, '');
+
+                    if (a.status === '1') {
+                        newTopic = `[Bahan PICA MOM ${prevDate}]\n\n${newTopic}`;
+                    } else if (a.status === '2') {
+                        const lastNote = a.proofNote ? ` - Terakhir: ${a.proofNote}` : '';
+                        newTopic = `[Lanjutan Progress MOM ${prevDate}${lastNote}]\n\n${newTopic}`;
                     }
-                    return { ...a, id: Date.now() + idx, topic: newTopic, history: [] };
+                    
+                    return { 
+                        ...a, 
+                        id: Date.now() + idx, 
+                        originalTaskId: a.originalTaskId || a.id, // Simpan ID akar untuk rantai salinan berjenjang
+                        topic: newTopic, 
+                        history: a.history || [] 
+                    };
                 });
                 
                 setCurrentMomId(Date.now().toString());
@@ -340,8 +354,32 @@
             const printDocument = () => window.print();
 
             // --- DATA PROCESSING ---
-            let allTasks = [];
-            moms.forEach(mom => mom.actions?.forEach(action => allTasks.push({ ...action, momId: mom.id, momDate: mom.meetingInfo?.date, momAgenda: mom.meetingInfo?.agenda })));
+            let rawAllTasks = [];
+            moms.forEach(mom => mom.actions?.forEach(action => rawAllTasks.push({ ...action, momId: mom.id, momDate: mom.meetingInfo?.date, momAgenda: mom.meetingInfo?.agenda })));
+            
+            const cleanTopic = (str) => (str || '').replace(/\[.*?\]/g, '').trim().toLowerCase();
+
+            // Filter tugas lama yang sudah ditarik ke MOM baru agar Dasbor bersih dari duplikat
+            let allTasks = rawAllTasks.filter(task => {
+                const isSuperseded = rawAllTasks.some(newerTask => {
+                    if (parseInt(newerTask.momId) <= parseInt(task.momId)) return false;
+                    
+                    // 1. Cek Rantai ID Absolut (Menangani tarikan berantai Jan -> Feb -> Apr)
+                    if (newerTask.originalTaskId === task.id || (task.originalTaskId && newerTask.originalTaskId === task.originalTaskId)) return true;
+                    
+                    // 2. Pencocokan Historis Cerdas (Mengabaikan perubahan batas waktu)
+                    const isSamePic = (newerTask.pic || '').trim().toLowerCase() === (task.pic || '').trim().toLowerCase();
+                    const oldTopic = cleanTopic(task.topic);
+                    const newTopic = cleanTopic(newerTask.topic);
+                    
+                    // Deteksi jika topik sama atau topik lama adalah bagian dari topik baru yang ditambahkan catatan
+                    const isSimilarTopic = oldTopic === newTopic || (oldTopic.length > 15 && newTopic.includes(oldTopic));
+                    
+                    return isSamePic && isSimilarTopic;
+                });
+                return !isSuperseded;
+            });
+
             allTasks.sort((a, b) => parseInt(a.status) - parseInt(b.status));
 
             const uniquePICs = [...new Set(allTasks.map(t => t.pic).filter(Boolean).map(p => p.trim()))].sort();
@@ -426,6 +464,8 @@
                 return risk === 'Overdue' || risk === 'ASAP';
             });
 
+            const tasksToRender = hideCompleted ? displayedTasks.filter(t => t.status !== '3') : displayedTasks;
+
             if (isLoading) return <div className="min-h-screen flex items-center justify-center font-bold text-blue-600 text-xl"><Icons.RefreshCw className="animate-spin mr-2" size={24}/> Memuat Sistem...</div>;
 
             return (
@@ -483,6 +523,10 @@
                                     <p className="text-gray-500 text-sm mt-1">{currentUser ? `Akses: ${currentUser.role.toUpperCase()}` : 'Akses Publik (Read-Only)'}</p>
                                 </div>
                                 <div className="flex flex-col sm:flex-row w-full md:w-auto gap-2">
+                                    <label className="flex items-center gap-2 text-sm font-bold text-gray-600 cursor-pointer bg-white border border-gray-300 px-3 py-2.5 rounded-lg shadow-sm whitespace-nowrap w-full sm:w-auto">
+                                        <input type="checkbox" checked={!hideCompleted} onChange={() => setHideCompleted(!hideCompleted)} className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"/>
+                                        Tampilkan Selesai
+                                    </label>
                                     <div className="flex items-center bg-white border border-gray-300 rounded-lg px-3 py-2.5 w-full sm:w-64 shadow-sm">
                                         <Icons.Search size={14} className="text-gray-400 mr-2" />
                                         <input type="text" placeholder="Cari topik atau agenda..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="bg-transparent border-none outline-none text-sm w-full" />
@@ -516,7 +560,7 @@
                                 
                                 {/* View untuk Mobile (Card Format) */}
                                 <div className="block md:hidden divide-y divide-gray-100">
-                                    {displayedTasks.map((task, i) => {
+                                    {tasksToRender.map((task, i) => {
                                         const risk = checkDueDateRisk(task.deadline, task.status);
                                         return (
                                         <div key={i} className="p-4 hover:bg-gray-50 space-y-3">
@@ -579,7 +623,7 @@
                                             </div>
                                         </div>
                                     )})}
-                                    {displayedTasks.length === 0 && <div className="text-center py-10 text-gray-400 text-sm">Tidak ada tugas ditemukan.</div>}
+                                    {tasksToRender.length === 0 && <div className="text-center py-10 text-gray-400 text-sm">Tidak ada tugas ditemukan.</div>}
                                 </div>
 
                                 {/* View untuk Desktop (Table Format) */}
@@ -596,7 +640,7 @@
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
-                                            {displayedTasks.map((task, i) => {
+                                            {tasksToRender.map((task, i) => {
                                                 const risk = checkDueDateRisk(task.deadline, task.status);
                                                 return (
                                                 <tr key={i} className="hover:bg-gray-50 transition-colors">
@@ -644,7 +688,7 @@
                                                     </td>
                                                 </tr>
                                                 )})}
-                                            {displayedTasks.length === 0 && <tr><td colSpan="6" className="text-center py-8 text-gray-400">Tidak ada tugas ditemukan.</td></tr>}
+                                            {tasksToRender.length === 0 && <tr><td colSpan="6" className="text-center py-8 text-gray-400">Tidak ada tugas ditemukan.</td></tr>}
                                         </tbody>
                                     </table>
                                 </div>
