@@ -1276,7 +1276,7 @@
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 mt-6 sm:mt-10">
                                         {docs.map((doc, i) => (
                                         <div key={doc.id} className="border-2 border-gray-300 p-2 text-center break-inside-avoid shadow-sm bg-white">
-                                            <img src={doc.localDataUrl || doc.url} alt={`Dokumentasi ${i+1}`} className="w-full h-48 sm:h-64 object-cover mb-3 rounded-sm border border-gray-200" />
+                                            <img src={doc.localDataUrl || doc.url} alt={`Dokumentasi ${i+1}`} className="w-full h-48 sm:h-64 object-cover print:object-contain print-exact mb-3 rounded-sm border border-gray-200" />
                                             <p className="text-xs sm:text-sm font-bold uppercase border-t pt-2 text-gray-800">{doc.description || `FOTO KEGIATAN ${i+1}`}</p>
                                         </div>
                                         ))}
