@@ -395,30 +395,49 @@
             const handleImageUpload = async (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                
+
+                const objectUrl = URL.createObjectURL(file);
                 const tempId = Date.now();
-                setDocs(prev => [...prev, { id: tempId, url: '', localDataUrl: '', description: '', isUploading: true }]);
+                setDocs(prev => [...prev, { id: tempId, url: '', localDataUrl: objectUrl, description: '', isUploading: true }]);
 
                 const reader = new FileReader();
                 reader.onload = async (event) => {
                     const img = new window.Image();
                     img.onload = async () => {
                         const canvas = document.createElement('canvas');
-                        // Resize to max 400px to keep base64 string small
-                        const maxDim = 400;
-                        let scale = 1;
-                        if (img.width > maxDim || img.height > maxDim) {
-                            scale = Math.min(maxDim / img.width, maxDim / img.height);
-                        }
-                        canvas.width = img.width * scale;
-                        canvas.height = img.height * scale;
-                        
+                        const scale = 600 / img.width; canvas.width = 600; canvas.height = img.height * scale;
                         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-                        const dataUrl = canvas.toDataURL('image/jpeg', 0.5); // Compress to 0.5 quality
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.6); 
+                        const base64Data = dataUrl.split(',')[1];
                         
-                        // Simpan Base64 langsung ke url, tidak perlu upload ke GDrive
-                        setDocs(prev => prev.map(doc => doc.id === tempId ? { ...doc, url: dataUrl, localDataUrl: dataUrl, isUploading: false } : doc));
-                        showToast("Foto berhasil dilampirkan!", "success");
+                        try {
+                            const response = await fetch(GAS_URL, {
+                                method: 'POST',
+                                body: JSON.stringify({
+                                    action: 'uploadFile',
+                                    filename: file.name,
+                                    mimeType: file.type,
+                                    data: base64Data
+                                })
+                            });
+                            const result = await response.json();
+                            if (result.status === 'success') {
+                                let driveUrl = result.url;
+                                const match = result.url.match(/id=([a-zA-Z0-9_-]+)/);
+                                if (match && match[1]) {
+                                    driveUrl = `https://drive.google.com/uc?export=view&id=${match[1]}`;
+                                }
+                                // Hapus localDataUrl sebelum save agar tidak memberatkan state/cache panjang, gunakan driveUrl
+                                setDocs(prev => prev.map(doc => doc.id === tempId ? { ...doc, url: driveUrl, localDataUrl: '', isUploading: false } : doc));
+                                showToast("Foto dokumentasi berhasil diunggah ke Drive!", "success");
+                            } else {
+                                setDocs(prev => prev.filter(doc => doc.id !== tempId)); 
+                                showToast("Gagal upload foto: " + result.message, "error");
+                            }
+                        } catch (error) {
+                            setDocs(prev => prev.filter(doc => doc.id !== tempId)); 
+                            showToast("Gagal upload foto, periksa koneksi.", "error");
+                        }
                     };
                     img.src = event.target.result;
                 };
