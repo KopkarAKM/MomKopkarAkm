@@ -231,9 +231,18 @@
                         meetingInfo, attendees, actions, docs,
                         updatedAt: new Date().toISOString()
                     };
-                    await fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'save', mom: momData }) });
-                    resetForm(); fetchMoms(); setActiveTab('dashboard');
-                } catch (error) { showToast("Gagal menyimpan MOM.", "error"); }
+                    
+                    const response = await fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'save', mom: momData }) });
+                    if (!response.ok) throw new Error("Network error");
+                    
+                    const result = await response.json();
+                    if (result.status === 'success') {
+                        showToast("MOM berhasil disimpan!", "success");
+                        resetForm(); fetchMoms(); setActiveTab('dashboard');
+                    } else {
+                        showToast("Gagal menyimpan MOM: " + result.message, "error");
+                    }
+                } catch (error) { showToast("Gagal menyimpan MOM. Coba perkecil ukuran foto.", "error"); }
             };
 
             const deleteMom = async (id) => {
@@ -390,37 +399,47 @@
                 setIsDocUploading(true);
                 const reader = new FileReader();
                 reader.onload = async (event) => {
-                    const dataUrl = event.target.result;
-                    const base64Data = dataUrl.split(',')[1];
-                    try {
-                        const response = await fetch(GAS_URL, {
-                            method: 'POST',
-                            body: JSON.stringify({
-                                action: 'uploadFile',
-                                filename: file.name,
-                                mimeType: file.type || 'image/jpeg',
-                                data: base64Data
-                            })
-                        });
-                        const result = await response.json();
+                    const img = new window.Image();
+                    img.onload = async () => {
+                        const canvas = document.createElement('canvas');
+                        const scale = 600 / img.width; canvas.width = 600; canvas.height = img.height * scale;
+                        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.6); 
+                        const base64Data = dataUrl.split(',')[1];
                         
-                        if (result.status === 'success') {
-                            let driveUrl = result.url;
-                            const match = driveUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                            if (match && match[1]) {
-                                driveUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
+                        try {
+                            const response = await fetch(GAS_URL, {
+                                method: 'POST',
+                                body: JSON.stringify({
+                                    action: 'uploadFile',
+                                    filename: file.name,
+                                    mimeType: 'image/jpeg',
+                                    data: base64Data
+                                })
+                            });
+                            
+                            if (!response.ok) throw new Error("Upload failed");
+                            const result = await response.json();
+                            
+                            if (result.status === 'success') {
+                                let driveUrl = result.url;
+                                const match = driveUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                                if (match && match[1]) {
+                                    driveUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
+                                }
+                                setDocs(prev => [...prev, { id: Date.now(), url: driveUrl, localDataUrl: dataUrl, description: '' }]);
+                                showToast("Foto dokumentasi berhasil diunggah!", "success");
+                            } else {
+                                showToast("Gagal upload foto: " + result.message, "error");
                             }
-                            setDocs(prev => [...prev, { id: Date.now(), url: driveUrl, localDataUrl: dataUrl, description: '' }]);
-                            showToast("Foto dokumentasi berhasil diunggah!", "success");
-                        } else {
-                            showToast("Gagal upload foto: " + result.message, "error");
+                        } catch (error) {
+                            console.error("Upload error:", error);
+                            showToast("Terjadi kesalahan koneksi saat mengunggah foto.", "error");
+                        } finally {
+                            setIsDocUploading(false);
                         }
-                    } catch (error) {
-                        console.error("Upload error:", error);
-                        showToast("Terjadi kesalahan koneksi saat mengunggah foto.", "error");
-                    } finally {
-                        setIsDocUploading(false);
-                    }
+                    };
+                    img.src = event.target.result;
                 };
                 reader.readAsDataURL(file);
             };
