@@ -1283,10 +1283,10 @@
                                         <div className="w-24 hidden sm:block"></div> 
                                     </div>
                                     <h2 className="text-center text-base sm:text-lg font-bold underline mb-6 uppercase tracking-widest">DOKUMENTASI RAPAT</h2>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 mt-6 sm:mt-10">
+                                    <div className="flex flex-wrap gap-6 sm:gap-8 mt-6 sm:mt-10 print:block">
                                         {docs.map((doc, i) => (
-                                        <div key={doc.id} className="border-2 border-gray-300 p-2 text-center break-inside-avoid shadow-sm bg-white">
-                                            <img src={doc.localDataUrl || doc.url} alt={`Dokumentasi ${i+1}`} className="w-full h-48 sm:h-64 object-cover print:object-contain print-exact mb-3 rounded-sm border border-gray-200" />
+                                        <div key={doc.id} className="border-2 border-gray-300 p-2 text-center break-inside-avoid shadow-sm bg-white w-full sm:w-[calc(50%-1rem)] print:w-full print:mb-8">
+                                            <img src={doc.localDataUrl || doc.url} alt={`Dokumentasi ${i+1}`} className="w-full h-auto sm:h-64 object-cover print:object-contain print-exact mb-3 rounded-sm border border-gray-200 print:max-h-[400px]" />
                                             <p className="text-xs sm:text-sm font-bold uppercase border-t pt-2 text-gray-800">{doc.description || `FOTO KEGIATAN ${i+1}`}</p>
                                         </div>
                                         ))}
