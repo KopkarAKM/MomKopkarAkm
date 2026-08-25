@@ -396,7 +396,6 @@
                 const file = e.target.files[0];
                 if (!file) return;
 
-                setIsDocUploading(true);
                 const reader = new FileReader();
                 reader.onload = async (event) => {
                     const img = new window.Image();
@@ -407,36 +406,37 @@
                         const dataUrl = canvas.toDataURL('image/jpeg', 0.6); 
                         const base64Data = dataUrl.split(',')[1];
                         
+                        // LANGSUNG tampilkan placeholder ke UI agar user tidak perlu menunggu!
+                        const tempId = Date.now();
+                        setDocs(prev => [...prev, { id: tempId, url: '', localDataUrl: dataUrl, description: '', isUploading: true }]);
+                        
                         try {
                             const response = await fetch(GAS_URL, {
                                 method: 'POST',
                                 body: JSON.stringify({
                                     action: 'uploadFile',
                                     filename: file.name,
-                                    mimeType: 'image/jpeg',
+                                    mimeType: file.type,
                                     data: base64Data
                                 })
                             });
-                            
-                            if (!response.ok) throw new Error("Upload failed");
                             const result = await response.json();
-                            
                             if (result.status === 'success') {
                                 let driveUrl = result.url;
-                                const match = driveUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                                const match = result.url.match(/id=([a-zA-Z0-9_-]+)/);
                                 if (match && match[1]) {
                                     driveUrl = `https://drive.google.com/uc?export=view&id=${match[1]}`;
                                 }
-                                setDocs(prev => [...prev, { id: Date.now(), url: driveUrl, localDataUrl: dataUrl, description: '' }]);
-                                showToast("Foto dokumentasi berhasil diunggah!", "success");
+                                // Update doc yang tadi dengan URL dari Google Drive dan hapus status isUploading
+                                setDocs(prev => prev.map(doc => doc.id === tempId ? { ...doc, url: driveUrl, isUploading: false } : doc));
+                                showToast("Foto dokumentasi berhasil diunggah ke Drive!", "success");
                             } else {
+                                setDocs(prev => prev.filter(doc => doc.id !== tempId)); // Hapus jika gagal
                                 showToast("Gagal upload foto: " + result.message, "error");
                             }
                         } catch (error) {
-                            console.error("Upload error:", error);
-                            showToast("Terjadi kesalahan koneksi saat mengunggah foto.", "error");
-                        } finally {
-                            setIsDocUploading(false);
+                            setDocs(prev => prev.filter(doc => doc.id !== tempId)); // Hapus jika gagal
+                            showToast("Gagal upload foto, periksa koneksi.", "error");
                         }
                     };
                     img.src = event.target.result;
@@ -1129,24 +1129,23 @@
                                             </div>
                                         </div>
                                         <div className="flex gap-4 items-center">
-                                            {isDocUploading ? (
-                                                <div className="flex items-center gap-2 text-blue-600 bg-blue-50 px-4 py-2 rounded-lg font-bold border border-blue-200 shadow-sm">
-                                                    <Icons.RefreshCw className="animate-spin" size={16} /> Mengunggah ke Drive...
-                                                </div>
-                                            ) : (
-                                                <label className="bg-white border-2 border-dashed border-gray-300 text-gray-600 px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-gray-50 hover:text-blue-600 hover:border-blue-300 cursor-pointer shadow-sm transition-all flex items-center gap-2">
-                                                    <Icons.Upload size={16}/> Upload Foto
-                                                    <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e)} className="hidden" />
-                                                </label>
-                                            )}
+                                            <label className="bg-white border-2 border-dashed border-gray-300 text-gray-600 px-4 py-2.5 rounded-lg text-sm font-bold hover:bg-gray-50 hover:text-blue-600 hover:border-blue-300 cursor-pointer shadow-sm transition-all flex items-center gap-2">
+                                                <Icons.Upload size={16}/> Tambah Foto
+                                                <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e)} className="hidden" />
+                                            </label>
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
                                         {docs.map(doc => (
                                         <div key={doc.id} className="relative border border-gray-200 p-3 rounded-xl bg-gray-50 shadow-sm">
-                                            <button onClick={() => removeDoc(doc.id)} className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full shadow hover:bg-red-600 transition-colors"><Icons.X size={14} /></button>
-                                            <img src={doc.localDataUrl || doc.url} alt="Dok" className="w-full h-32 object-cover rounded-lg mb-3 border border-gray-200 shadow-inner" />
-                                            <input type="text" placeholder="Tulis keterangan foto di sini..." value={doc.description} onChange={(e) => updateDocDesc(doc.id, e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-blue-500"/>
+                                            {doc.isUploading && (
+                                                <div className="absolute inset-0 bg-white/70 flex items-center justify-center rounded-xl z-10">
+                                                    <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold flex items-center gap-2 shadow-lg"><Icons.RefreshCw size={12} className="animate-spin" /> Mengunggah...</span>
+                                                </div>
+                                            )}
+                                            <button onClick={() => removeDoc(doc.id)} className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full shadow hover:bg-red-600 transition-colors z-20"><Icons.X size={14} /></button>
+                                            <img src={doc.localDataUrl || doc.url} alt="Dok" className={`w-full h-32 object-cover rounded-lg mb-3 border border-gray-200 shadow-inner ${doc.isUploading ? 'opacity-50 blur-sm' : ''}`} />
+                                            <input type="text" placeholder="Tulis keterangan foto di sini..." value={doc.description} onChange={(e) => updateDocDesc(doc.id, e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-blue-500" disabled={doc.isUploading}/>
                                         </div>
                                         ))}
                                     </div>
