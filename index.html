@@ -5,8 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kopkar AKM - Sistem MOM Terpadu</title>
     
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
     
     <!-- FontAwesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -71,7 +87,7 @@
         }, {});
 
         // --- URL DATABASE BARU ---
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbxJswirL-97YGHT2HRFW99vKZeceSJoQZ7oQNJ8oXipvvkXVOKgzfdUuf6WOH33jSv65w/exec";
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbzwJ7P0x9uQMapGd6GIZjvUJpNK3vNCTjPdOvQmnoONHm2PGsmeaPWgKTd6mhpdPwP1VQ/exec";
 
         const TEAM_MEMBERS = [
             { name: 'Ageng Prasongko', role: 'Ketua Koperasi', phone: '6285248995995' },
@@ -117,11 +133,18 @@
             const [reviewModalOpen, setReviewModalOpen] = useState(false);
             const [isFileUploading, setIsFileUploading] = useState(false);
 
+            // --- TOAST NOTIFICATION ---
+            const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
+            const showToast = (message, type = 'info') => {
+                setToast({ show: true, message, type });
+                setTimeout(() => setToast({ show: false, message: '', type: 'info' }), 3000);
+            };
+
             // --- FETCH DATA ---
             const fetchMoms = async () => {
                 setIsLoading(true);
                 try {
-                    const response = await fetch(GAS_URL);
+                    const response = await fetch(`${GAS_URL}?t=${new Date().getTime()}`);
                     const result = await response.json();
                     if (result.status === 'success') {
                         const fetchedMoms = result.data;
@@ -130,7 +153,7 @@
                     }
                 } catch (error) {
                     console.error("Error fetching data:", error);
-                    alert("Gagal menarik data. Cek koneksi internet Anda.");
+                    showToast("Gagal menarik data. Cek koneksi internet Anda.", "error");
                 } finally {
                     setIsLoading(false);
                 }
@@ -147,7 +170,7 @@
                 else {
                     const member = TEAM_MEMBERS.find(m => m.phone === input || m.name.toLowerCase() === input.toLowerCase());
                     if (member) setCurrentUser({ role: 'pengurus', name: member.name });
-                    else { alert("PIN / Nomor WA tidak terdaftar!"); return; }
+                    else { showToast("PIN / Nomor WA tidak terdaftar!", "error"); return; }
                 }
                 setLoginModalOpen(false);
                 setLoginInput('');
@@ -200,7 +223,7 @@
             };
 
             const saveMom = async () => {
-                if (!meetingInfo.agenda || !meetingInfo.date) return alert("Agenda dan Tanggal wajib diisi.");
+                if (!meetingInfo.agenda || !meetingInfo.date) { showToast("Agenda dan Tanggal wajib diisi.", "error"); return; }
                 try {
                     const momData = {
                         id: currentMomId || Date.now().toString(),
@@ -209,7 +232,7 @@
                     };
                     await fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'save', mom: momData }) });
                     resetForm(); fetchMoms(); setActiveTab('dashboard');
-                } catch (error) { alert("Gagal menyimpan MOM."); }
+                } catch (error) { showToast("Gagal menyimpan MOM.", "error"); }
             };
 
             const deleteMom = async (id) => {
@@ -224,25 +247,53 @@
                 const parentMom = moms.find(m => m.id === selectedMomId);
                 if (!parentMom) return;
                 
-                const oldAction = parentMom.actions.find(a => a.id === selectedAction.id);
-                let newHistory = selectedAction.history || [];
-                
-                if (oldAction.status !== selectedAction.status || oldAction.proofNote !== selectedAction.proofNote || oldAction.proofFileUrl !== selectedAction.proofFileUrl) {
-                    newHistory.unshift({
-                        date: new Date().toISOString(),
-                        user: currentUser?.name || 'Unknown',
-                        oldStatus: oldAction.status,
-                        newStatus: selectedAction.status,
-                        note: selectedAction.proofNote || 'Update progress'
+                try {
+                    const oldAction = parentMom.actions.find(a => a.id === selectedAction.id);
+                    let newHistory = selectedAction.history || [];
+                    
+                    if (oldAction.status !== selectedAction.status || oldAction.proofNote !== selectedAction.proofNote || oldAction.proofFileUrl !== selectedAction.proofFileUrl) {
+                        newHistory.unshift({
+                            date: new Date().toISOString(),
+                            user: currentUser?.name || 'Unknown',
+                            oldStatus: oldAction.status,
+                            newStatus: selectedAction.status,
+                            note: selectedAction.proofNote || 'Update progress'
+                        });
+                    }
+
+                    const finalAction = { ...selectedAction, status: selectedAction.status, history: newHistory };
+                    
+                    const updatedActions = parentMom.actions.map(a => {
+                        if (a.id === selectedAction.id) {
+                            return finalAction;
+                        }
+                        return a;
                     });
+                    
+                    const updatedMomData = { ...parentMom, actions: updatedActions, updatedAt: new Date().toISOString() };
+
+                    showToast("Menyimpan perubahan...", "info");
+                    try {
+                        const response = await fetch(GAS_URL, { 
+                            method: 'POST', 
+                            body: JSON.stringify({ action: 'save', mom: updatedMomData }) 
+                        });
+                        const result = await response.json();
+                        if (result.status === 'success') {
+                            setIsFollowUpModalOpen(false); 
+                            await fetchMoms();
+                            showToast("Progress berhasil diperbarui!", "success");
+                        } else {
+                            showToast("Gagal menyimpan: " + (result.message || "Unknown error"), "error");
+                        }
+                    } catch (error) {
+                        showToast("Terjadi kesalahan jaringan", "error");
+                        console.error("Error saving followup:", error);
+                    }
+
+                } catch (error) {
+                    showToast("Gagal menyimpan progress.", "error");
                 }
-
-                const finalAction = { ...selectedAction, history: newHistory };
-                const updatedActions = parentMom.actions.map(a => a.id === finalAction.id ? finalAction : a);
-                const updatedMomData = { ...parentMom, actions: updatedActions, updatedAt: new Date().toISOString() };
-
-                await fetch(GAS_URL, { method: 'POST', body: JSON.stringify({ action: 'save', mom: updatedMomData }) });
-                setIsFollowUpModalOpen(false); fetchMoms();
             };
 
             // --- UPLOAD FILE KE GOOGLE DRIVE ---
@@ -276,11 +327,11 @@
                                 proofImageBase64: null
                             });
                         } else {
-                            alert("Gagal upload file: " + result.message);
+                            showToast("Gagal upload file: " + result.message, "error");
                         }
                     } catch (error) {
                         console.error("Upload error:", error);
-                        alert("Terjadi kesalahan koneksi saat mengunggah.");
+                        showToast("Terjadi kesalahan koneksi saat mengunggah.", "error");
                     } finally {
                         setIsFileUploading(false);
                     }
@@ -475,7 +526,7 @@
                     {/* ==================================================== 
                         NAVIGASI (MOBILE OPTIMIZED)
                     ==================================================== */}
-                    <nav className="bg-white border-b shadow-sm print:hidden sticky top-0 z-40">
+                    <nav className="bg-white/80 backdrop-blur-md border-b shadow-sm print:hidden sticky top-0 z-40 transition-all">
                         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                             <div className="flex justify-between items-center h-16">
                                 <div className="flex items-center gap-2 shrink-0">
@@ -544,15 +595,27 @@
                             </div>
 
                             {/* KPI Cards (Mobile grid 2, Desktop grid 4) */}
+                            
+                            {/* PROGRESS BAR */}
+                            <div className="bg-white p-4 rounded-2xl border border-gray-200 shadow-sm flex flex-col gap-2">
+                                <div className="flex justify-between items-center">
+                                    <span className="text-sm font-bold text-gray-700">Tingkat Penyelesaian (Selesai vs Total)</span>
+                                    <span className="text-sm font-bold text-blue-600">{displayedTasks.length > 0 ? Math.round((displayedTasks.filter(t => t.status === '3').length / displayedTasks.length) * 100) : 0}%</span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                                    <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-1000 ease-out" style={{ width: `${displayedTasks.length > 0 ? Math.round((displayedTasks.filter(t => t.status === '3').length / displayedTasks.length) * 100) : 0}%` }}></div>
+                                </div>
+                            </div>
+
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-                                <div className="bg-white p-4 md:p-5 rounded-xl border-l-4 border-l-blue-500 shadow-sm"><p className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Total Tugas</p><p className="text-2xl md:text-3xl font-bold text-blue-600 mt-1">{displayedTasks.length}</p></div>
-                                <div className="bg-white p-4 md:p-5 rounded-xl border-l-4 border-l-green-500 shadow-sm"><p className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Selesai</p><p className="text-2xl md:text-3xl font-bold text-green-600 mt-1">{displayedTasks.filter(t => t.status === '3').length}</p></div>
-                                <div className="bg-white p-4 md:p-5 rounded-xl border-l-4 border-l-yellow-500 shadow-sm"><p className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Progress</p><p className="text-2xl md:text-3xl font-bold text-yellow-600 mt-1">{displayedTasks.filter(t => t.status === '2').length}</p></div>
-                                <div className="bg-white p-4 md:p-5 rounded-xl border-l-4 border-l-red-500 shadow-sm"><p className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Overdue / ASAP</p><p className="text-2xl md:text-3xl font-bold text-red-600 mt-1">{overdueTasks.length}</p></div>
+                                <div className="bg-gradient-to-br from-blue-50 to-white p-4 md:p-5 rounded-2xl border border-blue-100 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md"><p className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Total Tugas</p><p className="text-2xl md:text-3xl font-bold text-blue-600 mt-1">{displayedTasks.length}</p></div>
+                                <div className="bg-gradient-to-br from-green-50 to-white p-4 md:p-5 rounded-2xl border border-green-100 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md"><p className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Selesai</p><p className="text-2xl md:text-3xl font-bold text-green-600 mt-1">{displayedTasks.filter(t => t.status === '3').length}</p></div>
+                                <div className="bg-gradient-to-br from-yellow-50 to-white p-4 md:p-5 rounded-2xl border border-yellow-100 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md"><p className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Progress</p><p className="text-2xl md:text-3xl font-bold text-yellow-600 mt-1">{displayedTasks.filter(t => t.status === '2').length}</p></div>
+                                <div className="bg-gradient-to-br from-red-50 to-white p-4 md:p-5 rounded-2xl border border-red-100 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-md"><p className="text-[10px] md:text-xs text-gray-500 font-bold uppercase tracking-wider">Overdue / ASAP</p><p className="text-2xl md:text-3xl font-bold text-red-600 mt-1">{overdueTasks.length}</p></div>
                             </div>
 
                             {/* DAFTAR TUGAS */}
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                                 <div className="p-4 md:p-5 border-b bg-gray-50 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                                     <h2 className="font-bold text-lg text-gray-800 flex items-center gap-2"><Icons.LayoutDashboard size={18}/> Daftar Tindak Lanjut</h2>
                                     {canViewScorecard && <button onClick={() => setBroadcastModalOpen(true)} className="w-full sm:w-auto bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-green-700 flex justify-center items-center gap-2 shadow-sm"><Icons.Broadcast size={14}/> Broadcast Overdue</button>}
@@ -1091,7 +1154,7 @@
                                                 </thead>
                                                 <tbody>
                                                     {actions.map((a, i) => (
-                                                    <tr key={a.id}>
+                                                    <tr key={a.id} className="transition-colors hover:bg-blue-50/50">
                                                         <td className="border border-black py-2 px-2 text-center align-top">{i + 1}</td>
                                                         <td className="border border-black py-2 px-2 align-top whitespace-pre-wrap">{a.topic}</td>
                                                         <td className="border border-black py-2 px-2 text-center align-top">{formatTanggalMembaca(a.deadline)}</td>
@@ -1136,7 +1199,7 @@
                                                 {attendees.map((a, i) => {
                                                     const role = TEAM_MEMBERS.find(m => m.name.toLowerCase() === (a.name || '').toLowerCase().trim())?.role || '';
                                                     return (
-                                                    <tr key={a.id}>
+                                                    <tr key={a.id} className="transition-colors hover:bg-blue-50/50">
                                                         <td className="border border-black py-4 px-2 text-center align-middle font-bold">{i + 1}</td>
                                                         <td className="border border-black py-4 px-2 align-middle font-bold uppercase">{a.name}</td>
                                                         <td className="border border-black py-4 px-2 align-middle uppercase text-gray-700">{role}</td>
