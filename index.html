@@ -390,7 +390,8 @@
                 setIsDocUploading(true);
                 const reader = new FileReader();
                 reader.onload = async (event) => {
-                    const base64Data = event.target.result.split(',')[1];
+                    const dataUrl = event.target.result;
+                    const base64Data = dataUrl.split(',')[1];
                     try {
                         const response = await fetch(GAS_URL, {
                             method: 'POST',
@@ -407,9 +408,9 @@
                             let driveUrl = result.url;
                             const match = driveUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
                             if (match && match[1]) {
-                                driveUrl = `https://drive.google.com/uc?export=view&id=${match[1]}`;
+                                driveUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
                             }
-                            setDocs([...docs, { id: Date.now(), url: driveUrl, description: '' }]);
+                            setDocs(prev => [...prev, { id: Date.now(), url: driveUrl, localDataUrl: dataUrl, description: '' }]);
                             showToast("Foto dokumentasi berhasil diunggah!", "success");
                         } else {
                             showToast("Gagal upload foto: " + result.message, "error");
@@ -1125,7 +1126,7 @@
                                         {docs.map(doc => (
                                         <div key={doc.id} className="relative border border-gray-200 p-3 rounded-xl bg-gray-50 shadow-sm">
                                             <button onClick={() => removeDoc(doc.id)} className="absolute top-2 right-2 bg-red-500 text-white p-1.5 rounded-full shadow hover:bg-red-600 transition-colors"><Icons.X size={14} /></button>
-                                            <img src={doc.url} alt="Dok" className="w-full h-32 object-cover rounded-lg mb-3 border border-gray-200 shadow-inner" />
+                                            <img src={doc.localDataUrl || doc.url} alt="Dok" className="w-full h-32 object-cover rounded-lg mb-3 border border-gray-200 shadow-inner" />
                                             <input type="text" placeholder="Tulis keterangan foto di sini..." value={doc.description} onChange={(e) => updateDocDesc(doc.id, e.target.value)} className="w-full border border-gray-300 rounded-lg p-2.5 text-xs outline-none focus:ring-2 focus:ring-blue-500"/>
                                         </div>
                                         ))}
@@ -1256,7 +1257,7 @@
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 mt-6 sm:mt-10">
                                         {docs.map((doc, i) => (
                                         <div key={doc.id} className="border-2 border-gray-300 p-2 text-center break-inside-avoid shadow-sm bg-white">
-                                            <img src={doc.url} alt={`Dokumentasi ${i+1}`} className="w-full h-48 sm:h-64 object-cover mb-3 rounded-sm border border-gray-200" />
+                                            <img src={doc.localDataUrl || doc.url} alt={`Dokumentasi ${i+1}`} className="w-full h-48 sm:h-64 object-cover mb-3 rounded-sm border border-gray-200" />
                                             <p className="text-xs sm:text-sm font-bold uppercase border-t pt-2 text-gray-800">{doc.description || `FOTO KEGIATAN ${i+1}`}</p>
                                         </div>
                                         ))}
